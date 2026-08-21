@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Provisions-Tracker</title>
+<style>
+  :root{
+    --ink:#1F1B22; --plum:#714B67; --plumDeep:#4A3050; --plumSoft:#F3EDF2;
+    --paper:#F7F7F8; --line:#DEDCE1; --muted:#6B6570; --slate:#8F8A95;
+    --green:#00A09D; --greenSoft:#E0F2F1; --teal:#017E84; --tealSoft:#E2F0F1;
+    --amber:#C8891E; --amberSoft:#FCF3E2; --coral:#F06050; --coralSoft:#FCEDEB;
+    --sun:#F5C243; --shadow:0 1px 3px rgba(31,27,34,.07);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+  header{background:linear-gradient(135deg,var(--plum) 0%,var(--plumDeep) 62%,#3A2540 100%);color:#fff}
+  .num{font-variant-numeric:tabular-nums}
+  .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .between{justify-content:space-between}
+  .label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+  .label.light{color:#BCA8B8}
+  h2.sec{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--plum);margin:0}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);margin-top:24px}
+  .card.pad{padding:20px}
+  .card.mint{border-left:3px solid var(--green)}
+  .card.sun{border-left:3px solid var(--sun)}
+  .card.coral{border-left:3px solid var(--coral)}
+  button{font:inherit;cursor:pointer}
+  .btn{display:inline-flex;align-items:center;gap:7px;border-radius:5px;padding:8px 14px;font-weight:500;
+    background:#fff;color:var(--plum);border:1px solid var(--line)}
+  .btn.solid{background:var(--plum);color:#fff;border-color:var(--plum);box-shadow:0 1px 2px rgba(113,75,103,.25)}
+  .btn.quiet{background:transparent;border-color:transparent;color:var(--muted)}
+  .btn.danger{color:var(--coral);border-color:var(--coral)}
+  .btn.solid.danger{background:var(--coral);border-color:var(--coral);color:#fff}
+  .btn:hover{opacity:.85}
+  .btn.hdr{background:transparent;color:#EADFE6;border:1px solid rgba(255,255,255,.22)}
+  .btn.hdr.on{background:#fff;color:var(--plumDeep);border-color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  input,select,textarea{font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);
+    border-radius:6px;padding:8px 10px;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--plum)}
+  input.bare{border-color:transparent;background:transparent;padding:4px 8px}
+  input.bare:focus{border-color:var(--line)}
+  input.rt,td input.rt{text-align:right}
+  table{width:100%;border-collapse:collapse}
+  th{background:var(--plum);color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    padding:10px;text-align:right;font-weight:600}
+  th:first-child{text-align:left}
+  td{padding:8px 10px;border-top:1px solid var(--line);text-align:right}
+  td:first-child{text-align:left}
+  tr.qtot td{background:var(--plumSoft);font-weight:600}
+  tr.ytot td{background:var(--plumDeep);color:#fff;font-weight:600;border-top:none}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 12px;font-size:13px;font-weight:500}
+  .tag{display:inline-block;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:600;margin-left:8px}
+  .kpis{display:grid;gap:1px;background:rgba(255,255,255,.14);border-radius:10px;overflow:hidden;margin-top:24px;
+    grid-template-columns:repeat(5,1fr)}
+  .kpi{background:var(--plumDeep);padding:14px 18px}
+  .kpi .v{font-size:22px;font-weight:600;margin-top:3px}
+  .kpi .s{font-size:11px;color:#BCA8B8;margin-top:2px}
+  .month{border-top:1px solid var(--line)}
+  .month>.head{display:flex;align-items:center;gap:12px;padding:11px 16px;cursor:pointer}
+  .month>.head:hover{background:#fff}
+  .month.open>.head{background:#fff}
+  .month .name{width:100px;font-weight:500}
+  .deal{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 8px;border-top:1px solid var(--paper)}
+  .avatar{width:76px;height:76px;border-radius:50%;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,.14);
+    border:2px solid rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .avatar img{width:100%;height:100%;object-fit:cover}
+  .avatar .ini{color:#EADFE6;font-size:26px;font-weight:600}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .box{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .hint{font-size:12px;color:var(--slate)}
+  .hidden{display:none!important}
+  .ladder{position:relative;height:40px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;display:flex}
+  .ladder .seg{display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;
+    background:var(--plumSoft);color:var(--muted);border-right:1px solid var(--line)}
+  .ladder .seg.on{background:var(--plum);color:#fff}
+  .ladder .mark{position:absolute;top:0;width:3px;height:100%;background:var(--ink)}
+  .split{display:flex;height:28px;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:12px 0}
+  .split div{display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff}
+  .note{border-radius:8px;padding:12px 16px;margin-top:24px;background:var(--plumSoft);color:var(--plumDeep);
+    border:1px solid var(--plum)}
+  @media(max-width:900px){.kpis,.g4,.g3,.g2{grid-template-columns:1fr 1fr}}
+  @media(max-width:640px){.kpis,.g4,.g3,.g2{grid-template-columns:1fr}.wrap{padding:0 14px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap" style="padding-top:20px;padding-bottom:20px">
+    <div class="row between" style="padding-bottom:20px">
+      <div class="row" style="gap:14px">
+        <span id="brand"></span>
+        <span style="width:1px;height:34px;background:rgba(255,255,255,.28)"></span>
+        <span id="partner" style="color:#EADFE6"></span>
+        <span class="pill" style="background:rgba(255,255,255,.16);color:#fff;font-size:12px;font-weight:600">Provisions-Tracker</span>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:12px;color:#BCA8B8" id="ctx"></div>
+        <div id="saveChip" class="pill" style="margin-top:8px;font-size:12px;font-weight:600"></div>
+      </div>
+    </div>
+
+    <div class="row between" style="border-top:1px solid rgba(255,255,255,.16);padding-top:20px;gap:24px">
+      <div>
+        <div class="label light" style="margin-bottom:6px">Mitarbeiter</div>
+        <div class="row" id="profileChips"></div>
+      </div>
+      <div>
+        <div class="label light" style="margin-bottom:6px">Geschäftsjahr</div>
+        <div class="row" id="yearChips"></div>
+      </div>
+      <div class="row" style="margin-left:auto">
+        <button class="btn hdr" data-panel="help">Anleitung</button>
+        <button class="btn hdr" data-panel="settings">Stammdaten</button>
+        <button class="btn hdr" data-panel="io">Datei</button>
+      </div>
+    </div>
+
+    <div class="row" style="gap:20px;border-top:1px solid rgba(255,255,255,.16);margin-top:20px;padding-top:20px">
+      <label class="avatar" id="avatar" title="Profilfoto wählen">
+        <input type="file" accept="image/*" class="hidden" id="photoInput">
+      </label>
+      <div>
+        <div class="label light" style="letter-spacing:.18em" id="subline"></div>
+        <input id="nameInput" placeholder="Name eintragen" class="bare"
+          style="color:#fff;font-size:28px;font-weight:600;min-width:280px;padding-left:0">
+        <svg width="280" height="12" viewBox="0 0 260 12" fill="none" style="display:block">
+          <path d="M3 8.5C52 3.5 118 2.5 168 5.5C196 7.2 228 6.2 257 3.5" stroke="#00A09D" stroke-width="4.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+  </div>
+</header>
+
+<main class="wrap" style="padding-bottom:60px">
+  <div id="notice" class="note hidden"></div>
+  <section id="panelHelp" class="card pad hidden" style="border-color:var(--plum);border-top:3px solid var(--plum)"></section>
+  <section id="panelSettings" class="card pad hidden" style="border-color:var(--plum);border-top:3px solid var(--plum)"></section>
+  <section id="panelIo" class="card pad hidden" style="border-color:var(--plum);border-top:3px solid var(--plum)"></section>
+  <section id="tier" class="card pad mint"></section>
+  <section id="chart" class="card pad sun"></section>
+  <div id="quarters"></div>
+  <section id="payoutTable" class="card coral" style="overflow-x:auto"></section>
+  <div class="grid g2" style="margin-top:24px" id="settleWrap"></div>
+  <section id="monthsTable" class="card" style="overflow-x:auto"></section>
+  <p class="hint" style="margin-top:24px">
+    Alle Umsätze und Provisionen brutto ohne Abzüge. Die Provisionsstufe wird auf die Jahreszielerreichung
+    angewendet und wirkt auf den gesamten Jahresumsatz. Managed Services und Lizenzen zählen automatisch
+    vierfach, einmalige Closings einfach, wiederkehrende Closings über den ×4-Schalter.
+  </p>
+</main>
+
+<script>
+/* ================================================================= */
+/*  Grundlagen                                                       */
+/* ================================================================= */
+const MONTHS=["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+const MONTHS_S=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+const TYPES={
+  closing:{label:"Closing",factor:1,target:true,color:"var(--plum)",bg:"var(--plumSoft)"},
+  managed:{label:"Managed Services",factor:4,target:true,color:"var(--teal)",bg:"var(--tealSoft)"},
+  licence:{label:"Lizenz",factor:4,target:false,color:"var(--green)",bg:"var(--greenSoft)"},
+  pipeline:{label:"Pipeline",factor:1,target:false,color:"var(--amber)",bg:"var(--amberSoft)"}
+};
+const DEFAULT_TIERS=[{min:0,rate:0},{min:.25,rate:.01},{min:1,rate:.02},{min:1.2,rate:.03}];
+const LS_KEY="provisions-tracker-html-v1";
+
+const eur=(n,d=0)=>new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR",minimumFractionDigits:d,maximumFractionDigits:d}).format(Number.isFinite(n)?n:0);
+const numf=(n,d=2)=>new Intl.NumberFormat("de-DE",{maximumFractionDigits:d}).format(Number.isFinite(n)?n:0);
+const pct=(n,d=1)=>((Number.isFinite(n)?n:0)*100).toFixed(d).replace(".",",")+" %";
+const rateLabel=r=>pct(r,(r*100)%1===0?0:1);
+const uid=()=>Math.random().toString(36).slice(2,10);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function parseAmount(raw){
+  if(raw==null)return NaN;
+  let s=String(raw).trim(); if(!s)return NaN;
+  if(/[*x×]/i.test(s)){
+    const parts=s.split(/[*x×]/i).map(p=>p.trim()).filter(Boolean);
+    if(parts.length>=2){const v=parts.map(parseAmount);if(v.every(Number.isFinite))return v.reduce((a,b)=>a*b,1);}
+  }
+  s=s.replace(/[^\d.,-]/g,""); if(!s)return NaN;
+  const lc=s.lastIndexOf(","),ld=s.lastIndexOf(".");
+  let n; if(lc>ld)n=s.replace(/\./g,"").replace(",","."); else if(ld>lc)n=s.replace(/,/g,""); else n=s.replace(",",".");
+  const v=parseFloat(n); return Number.isFinite(v)?v:NaN;
+}
+
+function parsePaste(text){
+  const out=[];
+  for(const line of String(text).split(/\r?\n/)){
+    const t=line.trim(); if(!t)continue;
+    let recurring=/(recurring|wiederkehrend|abo|monatlich)/i.test(t);
+    const work=t.replace(/(recurring|wiederkehrend|abo|monatlich)/gi,"").trim();
+    let parts=work.split(/\t|;|\s{2,}|\|/).map(p=>p.trim()).filter(Boolean);
+    if(parts.length===1){const m=work.match(/^(.*?)[\s]+([\d.,*x×\s€eur]+)$/i);parts=m?[m[1].trim(),m[2].trim()]:[work];}
+    let amount=NaN,idx=-1;
+    for(let i=parts.length-1;i>=0;i--){const v=parseAmount(parts[i]);if(Number.isFinite(v)&&/\d/.test(parts[i])){amount=v;idx=i;break;}}
+    if(!Number.isFinite(amount))continue;
+    if(/[*x×]/i.test(parts[idx]))recurring=false;
+    const rest=parts.filter((_,i)=>i!==idx);
+    out.push({id:uid(),customer:(rest[0]||"Ohne Bezeichnung").trim(),note:rest.slice(1).join(" · ").trim(),
+      amount,recurring,type:"closing",prepaid:false,billed:0});
+  }
+  return out;
+}
+
+const typeFactor=d=>{const t=TYPES[d.type]||TYPES.closing;return t.factor===1?(d.recurring?4:1):t.factor;};
+const dealValue=d=>(Number(d.amount)||0)*typeFactor(d);
+function tierFor(a,tiers){const s=[...tiers].sort((x,y)=>x.min-y.min);let hit=s[0];for(const t of s)if(a>=t.min)hit=t;return hit;}
+const nextTier=(a,tiers)=>[...tiers].sort((x,y)=>x.min-y.min).find(t=>t.min>a)||null;
+
+const emptyYear=()=>({licenceRate:.02,closingShare:.5,rateMode:"tiers",flatRate:.02,
+  targets:[0,0,0,0],tiers:DEFAULT_TIERS.map(t=>({...t})),usePipeline:false,payoutsQ:[0,0,0,0],
+  deals:Object.fromEntries(Array.from({length:12},(_,i)=>[i,[]]))});
+const newProfile=(name,year)=>({id:uid(),name,activeYear:String(year),years:{[String(year)]:emptyYear()}});
+
+/* ================================================================= */
+/*  Zustand                                                          */
+/* ================================================================= */
+let state=null, openMonth=new Date().getMonth(), panel="", fileHandle=null, savedAt=null, saveErr="";
+let pasteFor=null, pasteReview=null, confirmAction="", newNameOpen=false, newYearOpen=false;
+
+const P=()=>state.profiles.find(p=>p.id===state.activeProfileId)||state.profiles[0];
+const YKEY=()=>P().activeYear;
+const D=()=>({...emptyYear(),...((P().years||{})[YKEY()]||{})});
+
+function patchProfile(patch){const p=P();Object.assign(p,patch);save();}
+function patchYear(patch){const p=P();p.years=p.years||{};p.years[YKEY()]={...D(),...patch};save();}
+function setDeals(m,fn){const d=D();const deals={...d.deals};deals[m]=fn(deals[m]||[]);patchYear({deals});}
+
+/* ================================================================= */
+/*  Berechnung                                                       */
+/* ================================================================= */
+function calc(){
+  const data=D();
+  const share=Number.isFinite(data.closingShare)?data.closingShare:.5;
+  const monthly=Array.from({length:12},(_,m)=>{
+    const o={target:0,licence:0,pipeline:0};
+    (data.deals[m]||[]).forEach(d=>{const t=TYPES[d.type];
+      if(t.target)o.target+=dealValue(d); else if(d.type==="licence")o.licence+=dealValue(d); else o.pipeline+=dealValue(d);});
+    o.licenceGross=o.licence*data.licenceRate; return o;});
+
+  const yearTarget=data.targets.reduce((a,b)=>a+(Number(b)||0),0);
+  const revenue=monthly.reduce((a,m)=>a+m.target,0);
+  const pipeline=monthly.reduce((a,m)=>a+m.pipeline,0);
+  const licence=monthly.reduce((a,m)=>a+m.licence,0);
+  const flat=data.rateMode==="flat";
+  const ach=yearTarget>0?revenue/yearTarget:0;
+  const tier=flat?{rate:Number(data.flatRate)||0}:(revenue>0&&yearTarget>0?tierFor(ach,data.tiers):{rate:0});
+  const gross=revenue*tier.rate;
+
+  let closingPart=0,billedPart=0,openPart=0;
+  const qB=[0,1,2,3].map(()=>({total:0,closing:0,billed:0,open:0,licence:0,prepaid:0}));
+  for(let m=0;m<12;m++){const qi=Math.floor(m/3);
+    (data.deals[m]||[]).forEach(d=>{const t=TYPES[d.type];
+      if(d.type==="licence"){qB[qi].licence+=dealValue(d)*data.licenceRate;return;}
+      if(!t.target)return;
+      const total=dealValue(d)*tier.rate, prepaid=!!d.prepaid;
+      const billed=prepaid?1:(d.billed?1:0);
+      const atC=prepaid?total:total*share;
+      const fromB=prepaid?0:total*(1-share)*billed;
+      const still=prepaid?0:total*(1-share)*(1-billed);
+      closingPart+=atC;billedPart+=fromB;openPart+=still;
+      qB[qi].total+=total;qB[qi].closing+=atC;qB[qi].billed+=fromB;qB[qi].open+=still;
+      if(prepaid)qB[qi].prepaid+=total;});}
+
+  const licGross=licence*data.licenceRate;
+  const commissionTotal=gross+licGross;
+
+  const fTotal=revenue+pipeline;
+  const fAch=yearTarget>0?fTotal/yearTarget:0;
+  const fTier=flat?{rate:Number(data.flatRate)||0}:(fTotal>0&&yearTarget>0?tierFor(fAch,data.tiers):{rate:0});
+
+  let step=null; const nt=!flat&&yearTarget>0?nextTier(ach,data.tiers):null;
+  if(nt){const need=Math.max(nt.min*yearTarget-revenue,0);
+    step={rate:nt.rate,need,plus:(revenue+need)*nt.rate-gross};}
+
+  const now=new Date(), yr=Number(YKEY()), cy=now.getFullYear(), cq=Math.floor(now.getMonth()/3);
+  const PAY=[{m:3,o:0},{m:6,o:0},{m:9,o:0},{m:0,o:1}];
+  const quarters=[0,1,2,3].map(q=>{
+    const ms=[q*3,q*3+1,q*3+2], b=qB[q];
+    const o={q,ms,target:Number(data.targets[q])||0,
+      revenue:ms.reduce((a,m)=>a+monthly[m].target,0),
+      pipeline:ms.reduce((a,m)=>a+monthly[m].pipeline,0),
+      licence:ms.reduce((a,m)=>a+monthly[m].licence,0),
+      comTotal:b.total+b.licence,comClosing:b.closing,comBilled:b.billed,comOpen:b.open,
+      comLicence:b.licence,comPrepaid:b.prepaid,comDue:b.closing+b.billed+b.licence};
+    o.share=revenue>0?o.revenue/revenue:0;
+    o.closed=yr<cy?true:yr>cy?false:q<cq;
+    o.current=yr===cy&&q===cq;
+    o.payoutMonth=PAY[q].m;o.payoutYear=yr+PAY[q].o;
+    o.payoutDue=o.payoutYear<cy||(o.payoutYear===cy&&o.payoutMonth<=now.getMonth());
+    o.received=Number((data.payoutsQ||[])[q])||0;
+    o.payoutDiff=o.received-o.comDue;
+    return o;});
+
+  const payoutsDueCount=quarters.filter(q=>q.payoutDue).length;
+  const dueSettled=quarters.filter(q=>q.payoutDue).reduce((a,q)=>a+q.comDue,0);
+  const duePending=quarters.filter(q=>!q.payoutDue).reduce((a,q)=>a+q.comDue,0);
+  const paid=quarters.reduce((a,q)=>a+q.received,0);
+
+  return{data,monthly,quarters,yearTarget,revenue,pipeline,licence,ach,rate:tier.rate,flat,
+    gross,licGross,commissionTotal,closingPart,billedPart,openPart,shareRate:share,
+    due:closingPart+billedPart+licGross,fAch,fRate:fTier.rate,forecastTotal:fTotal*fTier.rate+licGross,
+    step,payoutsDueCount,dueSettled,duePending,paid,diff:paid-dueSettled};
+}
+
+function payrollState(diff,paid,dueCount){
+  if(dueCount===0)return{key:"waiting",color:"var(--muted)",bg:"var(--paper)",label:"Noch keine Auszahlung fällig",
+    text:"Provisionen werden im April, Juli, Oktober und im Januar des Folgejahres abgerechnet."};
+  if(paid===0)return{key:"none",color:"var(--muted)",bg:"var(--paper)",label:"Noch keine Auszahlung erfasst",
+    text:"Sobald eine Provisionszahlung eingegangen ist, hier erfassen."};
+  if(Math.abs(diff)<1)return{key:"ok",color:"var(--green)",bg:"var(--greenSoft)",label:"Stimmt überein",
+    text:"Die Auszahlung entspricht der Berechnung."};
+  if(diff<0)return{key:"short",color:"var(--coral)",bg:"var(--coralSoft)",label:"Es fehlt Provision",
+    text:"Der ausgezahlte Betrag liegt unter dem fälligen Anspruch. Differenz mit der Abrechnung vergleichen und bei der Personalverrechnung nachfragen."};
+  return{key:"over",color:"var(--amber)",bg:"var(--amberSoft)",label:"Zu viel ausgezahlt",
+    text:"Es wurde mehr ausgezahlt als berechnet. Zuerst Abrechnungsstand und Vorkasse prüfen. Bleibt die Differenz, den Team Lead kontaktieren."};
+}
+
+/* ================================================================= */
+/*  Speichern: gemeinsame Datei, ersatzweise lokal                   */
+/* ================================================================= */
+let saveTimer=null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(async()=>{
+    try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(e){}
+    if(fileHandle){
+      try{
+        const w=await fileHandle.createWritable();
+        await w.write(JSON.stringify(state,null,2)); await w.close();
+        savedAt=new Date(); saveErr="";
+      }catch(e){ saveErr="Die gemeinsame Datei konnte nicht geschrieben werden."; }
+    }else{ savedAt=new Date(); saveErr=""; }
+    renderChip();
+  },600);
+  render();
+}
+
+async function chooseSharedFile(){
+  if(!window.showOpenFilePicker){flash("Dieser Browser unterstützt keine gemeinsame Datei. Bitte Chrome oder Edge verwenden.");return;}
+  try{
+    const [h]=await window.showOpenFilePicker({types:[{description:"Provisionsdaten",accept:{"application/json":[".json"]}}]});
+    const f=await h.getFile(); const txt=await f.text();
+    const parsed=JSON.parse(txt);
+    if(!parsed||!parsed.profiles)throw new Error("bad");
+    fileHandle=h; state=parsed; normalize();
+    flash("Gemeinsame Datei verbunden: "+f.name+". Änderungen werden dort gespeichert.");
+    render();
+  }catch(e){ if(e&&e.name!=="AbortError") flash("Die Datei konnte nicht gelesen werden."); }
+}
+
+async function createSharedFile(){
+  if(!window.showSaveFilePicker){flash("Dieser Browser unterstützt keine gemeinsame Datei. Bitte Chrome oder Edge verwenden.");return;}
+  try{
+    const h=await window.showSaveFilePicker({suggestedName:"provisionsdaten.json",
+      types:[{description:"Provisionsdaten",accept:{"application/json":[".json"]}}]});
+    fileHandle=h; await save(); flash("Gemeinsame Datei angelegt. Ab jetzt wird dorthin gespeichert.");
+    render();
+  }catch(e){ if(e&&e.name!=="AbortError") flash("Die Datei konnte nicht angelegt werden."); }
+}
+
+async function reloadShared(){
+  if(!fileHandle){flash("Es ist keine gemeinsame Datei verbunden.");return;}
+  try{
+    const f=await fileHandle.getFile(); const parsed=JSON.parse(await f.text());
+    if(!parsed||!parsed.profiles)throw new Error("bad");
+    state=parsed; normalize(); flash("Stand aus der gemeinsamen Datei neu geladen."); render();
+  }catch(e){ flash("Die Datei konnte nicht neu geladen werden."); }
+}
+
+function disconnectShared(){ fileHandle=null; flash("Verbindung getrennt. Änderungen bleiben nur in diesem Browser."); render(); }
+
+/* ================================================================= */
+/*  Meldungen                                                        */
+/* ================================================================= */
+let noticeTimer=null;
+function flash(msg){
+  const el=document.getElementById("notice");
+  el.textContent=msg; el.classList.remove("hidden");
+  clearTimeout(noticeTimer); noticeTimer=setTimeout(()=>el.classList.add("hidden"),5000);
+}
+
+/* ================================================================= */
+/*  Rendern                                                          */
+/* ================================================================= */
+function renderChip(){
+  const c=document.getElementById("saveChip");
+  const shared=!!fileHandle;
+  const bg=saveErr?"var(--coral)":shared?"var(--green)":"rgba(255,255,255,.16)";
+  const txt=saveErr?"Nicht gespeichert"
+    :savedAt?(shared?"Gemeinsame Datei · ":"Nur lokal · ")+savedAt.toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})
+    :"Noch nicht gespeichert";
+  c.style.background=bg; c.style.color="#fff";
+  c.style.border="1px solid "+(saveErr?"var(--coral)":shared?"var(--green)":"rgba(255,255,255,.32)");
+  c.innerHTML='<span style="width:7px;height:7px;border-radius:50%;background:'+(saveErr||shared?"#fff":"var(--sun)")+'"></span>'+esc(txt);
+}
+
+function render(){
+  const p=P(), data=D(), K=calc(), y=YKEY();
+
+  document.getElementById("brand").innerHTML = state.logoUrl
+    ? '<span style="display:inline-flex;align-items:center;background:'+(state.logoPlate===false?"transparent":"#fff")+
+      ';border-radius:8px;padding:'+(state.logoPlate===false?"0":"8px 14px")+'"><img src="'+esc(state.logoUrl)+
+      '" style="height:44px;max-width:260px;object-fit:contain;display:block"></span>'
+    : '<span style="font-size:42px;font-weight:600;line-height:1;letter-spacing:-.03em">odoo</span>';
+  document.getElementById("partner").textContent=state.partnerName||"Partner";
+  document.getElementById("ctx").textContent="Geschäftsjahr "+y+" · "+(p.name||"kein Name hinterlegt");
+  document.getElementById("subline").textContent="Provisionsübersicht · Geschäftsjahr "+y;
+  const ni=document.getElementById("nameInput");
+  if(document.activeElement!==ni)ni.value=p.name||"";
+  const av=document.getElementById("avatar");
+  const ini=(p.name||"").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
+  av.querySelectorAll(":scope > *:not(input)").forEach(n=>n.remove());
+  if(p.photo){const im=new Image();im.src=p.photo;av.prepend(im);}
+  else{const sp=document.createElement("span");sp.className="ini";sp.textContent=ini||"＋";av.prepend(sp);}
+
+  renderChip();
+  renderChips(p,y);
+  renderKpis(K);
+  renderPanels(K,data,p,y);
+  renderTier(K,data);
+  renderChart(K);
+  renderQuarters(K,data);
+  renderPayouts(K);
+  renderSettle(K);
+  renderMonths(K,data);
+}
+
+function chip(label,active,attrs){
+  return '<span class="pill" style="background:'+(active?"#fff":"rgba(255,255,255,.14)")+
+    ';color:'+(active?"var(--plum)":"#EADFE6")+';border:1px solid '+(active?"#fff":"rgba(255,255,255,.28)")+'" '+attrs+'>'+label+'</span>';
+}
+
+function renderChips(p,y){
+  const pc=document.getElementById("profileChips");
+  if(newNameOpen){
+    pc.innerHTML='<input id="newNameInput" placeholder="Name des Mitarbeiters" style="min-width:200px;border-radius:999px">'+
+      '<button class="btn" data-act="createProfile">Anlegen</button>'+
+      '<button class="btn quiet" style="color:#EADFE6" data-act="cancelProfile">Abbrechen</button>';
+    setTimeout(()=>{const i=document.getElementById("newNameInput");if(i)i.focus();},0);
+  }else{
+    pc.innerHTML=state.profiles.map((pr,i)=>{
+      const on=pr.id===p.id;
+      if(confirmAction==="del:"+pr.id){
+        return '<span class="pill" style="background:#fff;color:var(--coral);border:1px solid var(--coral)">'+
+          esc(pr.name||"Ohne Namen")+' löschen? <button class="btn quiet danger" data-act="delProfile" data-id="'+pr.id+'">Ja</button>'+
+          '<button class="btn quiet" data-act="cancelConfirm">Nein</button></span>';
+      }
+      const img=pr.photo?'<img src="'+esc(pr.photo)+'" style="width:20px;height:20px;border-radius:50%;object-fit:cover">':'';
+      const arrows=on&&state.profiles.length>1
+        ? '<button class="btn quiet" style="padding:0 4px" data-act="moveProfile" data-id="'+pr.id+'" data-dir="-1" '+(i===0?"disabled":"")+'>‹</button>'
+        : '';
+      const arrowsR=on&&state.profiles.length>1
+        ? '<button class="btn quiet" style="padding:0 4px" data-act="moveProfile" data-id="'+pr.id+'" data-dir="1" '+(i===state.profiles.length-1?"disabled":"")+'>›</button>'
+        : '';
+      const del=on?'<button class="btn quiet" style="padding:0 4px" data-act="askDelProfile" data-id="'+pr.id+'">×</button>':'';
+      return '<span class="pill" style="background:'+(on?"#fff":"rgba(255,255,255,.14)")+';color:'+(on?"var(--plum)":"#EADFE6")+
+        ';border:1px solid '+(on?"#fff":"rgba(255,255,255,.28)")+';padding-left:6px;padding-right:6px">'+
+        arrows+'<button class="btn quiet" style="color:inherit;padding:2px 6px;gap:6px" data-act="selProfile" data-id="'+pr.id+'">'+img+esc(pr.name||"Ohne Namen")+'</button>'+arrowsR+del+'</span>';
+    }).join("")+'<button class="btn quiet" style="color:#EADFE6;border:1px dashed rgba(255,255,255,.35);border-radius:999px;padding:4px 10px" data-act="askProfile">+</button>';
+  }
+
+  const yc=document.getElementById("yearChips");
+  const years=Object.keys(P().years||{}).sort();
+  if(newYearOpen){
+    yc.innerHTML='<input id="newYearInput" value="'+(Number(y)+1)+'" style="width:90px;border-radius:999px">'+
+      '<label style="color:#EADFE6;font-size:12px"><input type="checkbox" id="carryOver" checked> Ziele übernehmen</label>'+
+      '<button class="btn" data-act="createYear">Anlegen</button>'+
+      '<button class="btn quiet" style="color:#EADFE6" data-act="cancelYear">Abbrechen</button>';
+  }else{
+    yc.innerHTML=years.map(yy=>chip(yy,yy===y,'data-act="selYear" data-y="'+yy+'" style="cursor:pointer;background:'+(yy===y?"#fff":"rgba(255,255,255,.14)")+';color:'+(yy===y?"var(--plum)":"#EADFE6")+';border:1px solid '+(yy===y?"#fff":"rgba(255,255,255,.28)")+'"')).join("")+
+      '<button class="btn quiet" style="color:#EADFE6;border:1px dashed rgba(255,255,255,.35);border-radius:999px;padding:4px 10px" data-act="askYear">+</button>';
+  }
+
+  document.querySelectorAll("[data-panel]").forEach(b=>{
+    b.className="btn hdr"+(panel===b.dataset.panel?" on":"");
+  });
+}
+
+function renderKpis(K){
+  const st=payrollState(K.diff,K.paid,K.payoutsDueCount);
+  const items=[
+    ["Jahresziel",eur(K.yearTarget),K.quarters.filter(q=>q.target>0).length+" von 4 Quartalen hinterlegt",null],
+    ["Umsatz gewertet",eur(K.revenue),K.yearTarget>0?"Zielerreichung "+pct(K.ach):"noch kein Ziel gesetzt",null],
+    ["Provision gesamt",eur(K.commissionTotal),"Satz "+rateLabel(K.rate)+" plus Lizenzen "+eur(K.licGross),null],
+    ["Davon fällig",eur(K.due),K.openPart>0?eur(K.openPart)+" noch offen":"vollständig fällig",null],
+    ["Differenz Lohnzettel",(K.diff>0?"+":"")+eur(K.diff),st.label,st.key==="waiting"||st.key==="none"?null:st.color]
+  ];
+  document.getElementById("kpis").innerHTML=items.map(([k,v,s,c])=>
+    '<div class="kpi" style="'+(c?"border-bottom:3px solid "+c:"")+'"><div class="label light">'+k+
+    '</div><div class="v num" style="'+(c?"color:"+c:"")+'">'+v+'</div><div class="s">'+esc(s)+'</div></div>').join("");
+}
+
+function renderTier(K,data){
+  const el=document.getElementById("tier");
+  let body;
+  if(K.flat){
+    body='<div class="row" style="background:var(--plumSoft);border-radius:8px;padding:12px 16px;gap:12px">'+
+      '<span style="background:var(--plum);color:#fff;border-radius:6px;padding:4px 12px;font-size:18px;font-weight:600">'+rateLabel(K.rate)+'</span>'+
+      '<span>Fester Satz auf jeden gewerteten Umsatz, unabhängig von der Zielerreichung.</span></div>';
+  }else{
+    const s=[...data.tiers].sort((a,b)=>a.min-b.min);
+    const lastMin=s[s.length-1].min, max=Math.max(lastMin*1.35,lastMin+.3,1.3);
+    const stops=[...s.map(t=>t.min),max];
+    const segs=s.map((t,i)=>{const w=((stops[i+1]-stops[i])/max)*100;
+      return '<div class="seg'+(t.rate===K.rate?" on":"")+'" style="width:'+w+'%">'+rateLabel(t.rate)+'</div>';}).join("");
+    const left=(Math.min(Math.max(K.ach,0),max)/max)*100;
+    body='<div class="ladder">'+segs+'<div class="mark" style="left:'+left+'%"></div></div>'+
+      '<div class="row" style="justify-content:space-between;margin-top:4px">'+
+      stops.map(v=>'<span class="hint num">'+pct(v,0)+'</span>').join("")+'</div>';
+  }
+  let stepBox="";
+  if(K.step){
+    stepBox='<div style="background:var(--plumSoft);border-radius:8px;padding:12px 16px;margin-top:14px">'+
+      'Noch <b class="num" style="color:var(--plum)">'+eur(K.step.need)+'</b> Umsatz bis zur Stufe <b style="color:var(--plum)">'+rateLabel(K.step.rate)+'</b>.'+
+      (K.step.plus>0?' Das bringt <b class="num" style="color:var(--green)">'+eur(K.step.plus)+'</b> zusätzliche Provision, weil der höhere Satz auf den gesamten Jahresumsatz wirkt.':'')+'</div>';
+  }
+  el.innerHTML='<div class="row between" style="align-items:flex-end;margin-bottom:14px">'+
+    '<div><h2 class="sec">'+(K.flat?"Provisionssatz":"Provisionsstufe")+' '+YKEY()+'</h2>'+
+    '<div class="hint" style="margin-top:4px">'+(K.flat?"Fester Satz, in den Stammdaten hinterlegt.":"Gilt für den gesamten Jahresumsatz, nicht je Quartal.")+'</div></div>'+
+    '<div class="row" style="gap:22px">'+
+    ['Erreichung|'+(K.yearTarget>0?pct(K.ach):"–"),'Satz|'+(K.rate?rateLabel(K.rate):"–"),
+     'Provision Umsatz|'+eur(K.gross),'Davon fällig|'+eur(K.closingPart+K.billedPart)]
+      .map(s=>{const [a,b]=s.split("|");return '<div><div class="label">'+a+'</div><div class="num" style="font-size:18px;font-weight:600">'+b+'</div></div>';}).join("")+
+    '</div></div>'+body+stepBox+
+    (data.usePipeline&&K.pipeline>0?'<div class="hint" style="margin-top:12px;color:var(--amber)">Mit Pipeline: '+pct(K.fAch)+' Erreichung, Satz '+rateLabel(K.fRate)+', Provision gesamt '+eur(K.forecastTotal)+'.</div>':'');
+}
+
+function renderChart(K){
+  const max=Math.max(1,...K.quarters.map(q=>Math.max(q.target,q.revenue+q.pipeline)));
+  const H=170,W=680,bw=52,gap=28,pad=40;
+  let bars="";
+  K.quarters.forEach((q,i)=>{
+    const x=pad+i*(bw*2+gap+18);
+    const hT=(q.target/max)*H, hR=(q.revenue/max)*H, hP=(q.pipeline/max)*H;
+    bars+='<rect x="'+x+'" y="'+(H-hT)+'" width="'+bw+'" height="'+hT+'" fill="var(--line)" rx="3"/>';
+    bars+='<rect x="'+(x+bw+6)+'" y="'+(H-hR)+'" width="'+bw+'" height="'+hR+'" fill="var(--plum)" rx="3"/>';
+    if(hP>0)bars+='<rect x="'+(x+bw+6)+'" y="'+(H-hR-hP)+'" width="'+bw+'" height="'+hP+'" fill="var(--amber)" rx="3"/>';
+    bars+='<text x="'+(x+bw)+'" y="'+(H+18)+'" text-anchor="middle" font-size="12" fill="var(--muted)">Q'+(q.q+1)+'</text>';
+  });
+  document.getElementById("chart").innerHTML='<h2 class="sec" style="margin-bottom:14px">Ziel und Umsatz je Quartal</h2>'+
+    '<svg viewBox="0 0 '+W+' '+(H+30)+'" style="width:100%;height:210px">'+bars+'</svg>'+
+    '<div class="row hint" style="gap:16px;margin-top:6px">'+
+    '<span><span style="display:inline-block;width:10px;height:10px;background:var(--line);border-radius:2px"></span> Ziel</span>'+
+    '<span><span style="display:inline-block;width:10px;height:10px;background:var(--plum);border-radius:2px"></span> Umsatz</span>'+
+    '<span><span style="display:inline-block;width:10px;height:10px;background:var(--amber);border-radius:2px"></span> Pipeline</span></div>';
+}
+
+function dealRow(d,m,data){
+  const t=TYPES[d.type], auto=t.factor>1;
+  const opts=(data.usePipeline?["closing","managed","licence","pipeline"]:["closing","managed","licence"])
+    .map(k=>'<option value="'+k+'"'+(k===d.type?" selected":"")+'>'+TYPES[k].label+'</option>').join("");
+  const months=MONTHS_S.map((mn,i)=>'<option value="'+i+'"'+(i===m?" selected":"")+'>'+mn+'</option>').join("");
+  return '<div class="deal">'+
+    '<input class="bare" style="flex:1;min-width:130px" value="'+esc(d.customer)+'" data-act="dealField" data-f="customer" data-id="'+d.id+'" data-m="'+m+'" placeholder="Kunde">'+
+    '<input class="bare" style="flex:1;min-width:110px;font-size:12px;color:var(--muted)" value="'+esc(d.note||"")+'" data-act="dealField" data-f="note" data-id="'+d.id+'" data-m="'+m+'" placeholder="Notiz">'+
+    '<select style="background:'+t.bg+';color:'+t.color+';border:none;font-size:12px;font-weight:600;padding:4px 6px" data-act="dealField" data-f="type" data-id="'+d.id+'" data-m="'+m+'">'+opts+'</select>'+
+    (auto?'<span class="tag" style="background:'+t.bg+';color:'+t.color+';margin:0">×4 fix</span>'
+        :'<button class="btn quiet" style="font-size:12px;padding:3px 8px;border:1px solid '+(d.recurring?"var(--plumSoft)":"var(--line)")+';background:'+(d.recurring?"var(--plumSoft)":"transparent")+';color:'+(d.recurring?"var(--plum)":"var(--slate)")+'" data-act="toggleRec" data-id="'+d.id+'" data-m="'+m+'">×4</button>')+
+    '<input class="bare rt num" style="width:110px" value="'+numf(d.amount)+'" data-act="dealAmount" data-id="'+d.id+'" data-m="'+m+'">'+
+    '<span class="num" style="width:110px;text-align:right;font-weight:600;color:'+t.color+'">'+eur(dealValue(d))+'</span>'+
+    (t.target
+      ? '<button class="btn quiet" style="font-size:12px;padding:3px 8px;border:1px solid '+(d.prepaid?"var(--teal)":"var(--line)")+';background:'+(d.prepaid?"var(--tealSoft)":"transparent")+';color:'+(d.prepaid?"var(--teal)":"var(--slate)")+'" data-act="togglePre" data-id="'+d.id+'" data-m="'+m+'">Vorkasse</button>'+
+        (d.prepaid?'<span style="width:110px;text-align:right;font-size:12px;font-weight:600;color:var(--teal)">voll fällig</span>'
+          :'<button class="btn quiet" style="width:110px;justify-content:center;font-size:12px;padding:3px 8px;border:1px solid '+(d.billed?"var(--teal)":"var(--line)")+';background:'+(d.billed?"var(--tealSoft)":"transparent")+';color:'+(d.billed?"var(--teal)":"var(--slate)")+'" data-act="toggleBilled" data-id="'+d.id+'" data-m="'+m+'" title="Zweite Hälfte der Provision, fällig sobald der Auftrag abgerechnet ist">'+(d.billed?"abgerechnet":"Rest offen")+'</button>')
+      : '<span style="width:180px"></span>')+
+    '<select style="font-size:12px;padding:3px 4px" data-act="moveDeal" data-id="'+d.id+'" data-m="'+m+'">'+months+'</select>'+
+    '<button class="btn quiet" style="padding:2px 6px" data-act="dupDeal" data-id="'+d.id+'" data-m="'+m+'" title="duplizieren">⧉</button>'+
+    '<button class="btn quiet" style="padding:2px 6px" data-act="delDeal" data-id="'+d.id+'" data-m="'+m+'" title="löschen">🗑</button>'+
+    '</div>';
+}
+
+function renderQuarters(K,data){
+  const wrap=document.getElementById("quarters");
+  wrap.innerHTML=K.quarters.map(q=>{
+    const head='<div class="row between" style="padding:16px 20px;background:#fff;border-radius:9px 9px 0 0">'+
+      '<div><div style="font-size:17px;font-weight:600">Q'+(q.q+1)+'</div>'+
+      '<div class="hint">'+MONTHS[q.ms[0]]+' bis '+MONTHS[q.ms[2]]+'</div></div>'+
+      '<div class="row" style="gap:22px">'+
+      '<div><div class="label">Quartalsziel</div><input class="bare rt num" style="width:110px;font-size:16px;font-weight:600" value="'+numf(q.target)+'" data-act="qTarget" data-q="'+q.q+'"></div>'+
+      '<div><div class="label">Umsatz</div><div class="num" style="font-size:16px;font-weight:600">'+eur(q.revenue)+'</div></div>'+
+      '<div><div class="label">Quartalstakt</div><div class="num" style="font-size:16px;font-weight:600">'+(q.target>0?pct(q.revenue/q.target):"–")+'</div></div>'+
+      '<div><div class="label">Lizenzen</div><div class="num" style="font-size:16px;font-weight:600;color:var(--green)">'+eur(q.licence)+'</div></div>'+
+      '</div></div>';
+    const months=q.ms.map(m=>{
+      const list=data.deals[m]||[];
+      let s={target:0,licence:0,pipeline:0};
+      list.forEach(d=>{const t=TYPES[d.type];
+        if(t.target)s.target+=dealValue(d);else if(d.type==="licence")s.licence+=dealValue(d);else s.pipeline+=dealValue(d);});
+      const open=openMonth===m;
+      let body="";
+      if(open){
+        body='<div style="padding:0 16px 16px">'+
+          (list.length?'<div class="hint" style="padding:0 4px 4px">Ein Klick auf „Rest offen“ schaltet die zweite Provisionshälfte frei, sobald der Auftrag abgerechnet ist. Bei Vorkasse ist sie sofort voll fällig.</div>'+
+            '<div style="background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px">'+list.map(d=>dealRow(d,m,data)).join("")+'</div>':'')+
+          '<div class="row">'+
+          '<input id="nc'+m+'" placeholder="Kunde" style="flex:1;min-width:140px">'+
+          '<input id="nn'+m+'" placeholder="Notiz, optional" style="flex:1;min-width:120px">'+
+          '<input id="na'+m+'" placeholder="Betrag netto" class="rt" style="width:140px">'+
+          '<select id="nt'+m+'">'+(data.usePipeline?["closing","managed","licence","pipeline"]:["closing","managed","licence"]).map(k=>'<option value="'+k+'">'+TYPES[k].label+'</option>').join("")+'</select>'+
+          '<label class="hint"><input type="checkbox" id="nr'+m+'"> ×4</label>'+
+          '<label class="hint"><input type="checkbox" id="np'+m+'"> Vorkasse</label>'+
+          '<button class="btn solid" data-act="addDeal" data-m="'+m+'">Hinzufügen</button>'+
+          '<button class="btn quiet" data-act="openPaste" data-m="'+m+'">Liste einfügen</button>'+
+          '</div>'+ (pasteFor===m?pasteBlock(m):"")+'</div>';
+      }
+      return '<div class="month'+(open?" open":"")+'"><div class="head" data-act="toggleMonth" data-m="'+m+'">'+
+        '<span style="color:var(--muted)">'+(open?"▾":"▸")+'</span>'+
+        '<span class="name" style="color:'+(open?"var(--plum)":"inherit")+'">'+MONTHS[m]+'</span>'+
+        '<span class="num">'+eur(s.target)+'</span>'+
+        '<span class="row hint" style="margin-left:auto;gap:12px">'+
+        (s.pipeline?'<span style="color:var(--amber)">Pipeline '+eur(s.pipeline)+'</span>':'')+
+        (s.licence?'<span style="color:var(--green)">Lizenz '+eur(s.licence)+'</span>':'')+
+        '<span>'+list.length+(list.length===1?" Eintrag":" Einträge")+'</span></span></div>'+body+'</div>';
+    }).join("");
+    return '<section class="card" style="background:var(--paper);overflow:hidden">'+head+months+'</section>';
+  }).join("");
+}
+
+function pasteBlock(m){
+  if(pasteReview){
+    const dup=pasteReview.dupes.length;
+    return '<div class="box" style="margin-top:12px;background:#fff">'+
+      (pasteReview.fresh.length?'<div><b>'+pasteReview.fresh.length+'</b> neue Positionen, zusammen '+eur(pasteReview.fresh.reduce((a,d)=>a+dealValue(d),0))+'.</div>':'')+
+      (dup?'<div style="background:var(--coralSoft);border-radius:6px;padding:10px;margin-top:8px"><b style="color:var(--coral)">'+dup+' mögliche Dubletten</b><div class="hint">'+
+        pasteReview.dupes.slice(0,5).map(d=>esc(d.customer)+" · "+eur(dealValue(d))).join("<br>")+'</div></div>':'')+
+      (!pasteReview.fresh.length&&!dup?'<div style="color:var(--coral)">Keine Betragszeile erkannt.</div>':'')+
+      '<div class="row" style="margin-top:10px">'+
+      (pasteReview.fresh.length?'<button class="btn solid" data-act="commitPaste" data-m="'+m+'" data-all="0">'+(dup?"Nur neue übernehmen":"Übernehmen")+'</button>':'')+
+      (dup?'<button class="btn" data-act="commitPaste" data-m="'+m+'" data-all="1">Alles übernehmen</button>':'')+
+      '<button class="btn quiet" data-act="backPaste">Zurück</button></div></div>';
+  }
+  return '<div class="box" style="margin-top:12px;background:#fff">'+
+    '<div class="hint" style="margin-bottom:6px">Eine Zeile pro Position. Erkannt werden Tabs, Semikolon, deutsche Zahlen und Rechnungen wie 600*4.</div>'+
+    '<textarea id="pasteArea" rows="5" style="width:100%;font-family:ui-monospace,monospace" placeholder="Muster GmbH&#9;12.400,00&#10;Acme AG; 3.200; wiederkehrend"></textarea>'+
+    '<div class="row" style="margin-top:8px">'+
+    '<select id="pasteType">'+Object.keys(TYPES).map(k=>'<option value="'+k+'">Als '+TYPES[k].label+'</option>').join("")+'</select>'+
+    '<button class="btn solid" data-act="checkPaste" data-m="'+m+'">Prüfen</button>'+
+    '<button class="btn quiet" data-act="closePaste">Abbrechen</button></div></div>';
+}
+
+function renderPayouts(K){
+  document.getElementById("payoutTable").innerHTML=
+    '<div style="padding:20px 20px 0"><h2 class="sec">Auszahlung je Quartal, brutto</h2>'+
+    '<div class="hint" style="margin-top:6px">Zugeordnet nach dem Quartal des Abschlusses. '+
+    (K.flat?'Gerechnet wird durchgehend mit dem festen Satz von '+rateLabel(K.rate)+'.'
+      :'Der Satz von '+rateLabel(K.rate)+' ergibt sich aus der Jahreserreichung und verändert rückwirkend alle Quartale, sobald eine höhere Stufe erreicht wird.')+
+    ' In den Lohnzettel-Abgleich fließen nur erreichte Auszahlungstermine ein.</div></div>'+
+    '<table style="margin-top:14px"><thead><tr>'+
+    ["Quartal","Umsatz","Provision gesamt","Bei Abschluss","Aus Abrechnung","Lizenzen","Fällig","Noch offen"].map(h=>'<th>'+h+'</th>').join("")+
+    '</tr></thead><tbody>'+K.quarters.map(q=>{
+      const st=q.closed?["abgeschlossen","var(--greenSoft)","var(--green)"]
+        :q.current?["läuft","var(--amberSoft)","var(--amber)"]:["offen","var(--paper)","var(--slate)"];
+      return '<tr><td><b>Q'+(q.q+1)+'</b><span class="tag" style="background:'+st[1]+';color:'+st[2]+';border:1px solid '+st[2]+'">'+st[0]+'</span>'+
+        (q.comPrepaid>0?'<span class="tag" style="background:var(--tealSoft);color:var(--teal)">Vorkasse</span>':'')+'</td>'+
+        '<td class="num">'+eur(q.revenue)+'</td><td class="num">'+eur(q.comTotal)+'</td>'+
+        '<td class="num" style="color:var(--plum)">'+eur(q.comClosing)+'</td>'+
+        '<td class="num" style="color:var(--teal)">'+eur(q.comBilled)+'</td>'+
+        '<td class="num" style="color:var(--green)">'+eur(q.comLicence)+'</td>'+
+        '<td class="num" style="font-weight:600;color:var(--plum)">'+eur(q.comDue)+'</td>'+
+        '<td class="num" style="color:var(--muted)">'+(q.comOpen>0?eur(q.comOpen):"–")+'</td></tr>';
+    }).join("")+
+    '<tr class="ytot"><td>Jahr gesamt</td><td class="num">'+eur(K.revenue)+'</td><td class="num">'+eur(K.commissionTotal)+
+    '</td><td class="num">'+eur(K.closingPart)+'</td><td class="num">'+eur(K.billedPart)+'</td><td class="num">'+eur(K.licGross)+
+    '</td><td class="num">'+eur(K.due)+'</td><td class="num">'+(K.openPart>0?eur(K.openPart):"–")+'</td></tr></tbody></table>';
+}
+
+function renderSettle(K){
+  const st=payrollState(K.diff,K.paid,K.payoutsDueCount);
+  const left='<div class="card pad" style="margin-top:0"><h2 class="sec" style="margin-bottom:14px">Abrechnung '+YKEY()+'</h2><table>'+
+    [["Provisionsrelevanter Umsatz",eur(K.revenue),""],["Jahresziel",eur(K.yearTarget),""],
+     ["Zielerreichung",K.yearTarget>0?pct(K.ach):"–",""],["Provisionssatz",K.rate?rateLabel(K.rate):"–","color:var(--plum)"],
+     ["Provision auf Umsatz",eur(K.gross),""],["Lizenzumsatz gewertet",eur(K.licence),""],
+     ["Lizenzprovision",eur(K.licGross),"color:var(--green)"]]
+      .map(r=>'<tr><td style="color:var(--muted)">'+r[0]+'</td><td class="num" style="font-weight:600;'+r[2]+'">'+r[1]+'</td></tr>').join("")+
+    '<tr><td style="border-top:2px solid var(--plum);font-weight:600">Provision gesamt</td>'+
+    '<td class="num" style="border-top:2px solid var(--plum);font-size:19px;font-weight:600;color:var(--plum)">'+eur(K.commissionTotal)+'</td></tr></table>'+
+    '<h2 class="sec" style="margin-top:22px">Aufteilung der Umsatzprovision</h2>'+
+    '<div class="hint" style="margin:6px 0">'+pct(K.shareRate,0)+' entstehen mit dem Abschluss, der Rest folgt dem Abrechnungsfortschritt. Vorkasse-Positionen sind sofort voll fällig.</div>'+
+    (()=>{const tot=K.closingPart+K.billedPart+K.openPart||1;
+      return '<div class="split">'+
+      [[K.closingPart,"var(--plum)"],[K.billedPart,"var(--teal)"],[K.openPart,"var(--line)"]]
+        .filter(x=>x[0]>0).map(x=>'<div style="width:'+(x[0]/tot*100)+'%;background:'+x[1]+';color:'+(x[1]==="var(--line)"?"var(--muted)":"#fff")+'">'+
+          (x[0]/tot>.12?eur(x[0]):"")+'</div>').join("")+'</div>';})()+
+    '<table>'+[["Bei Abschluss verdient",eur(K.closingPart),"var(--plum)"],
+      ["Aus bereits abgerechnetem Volumen",eur(K.billedPart),"var(--teal)"],
+      ["Noch offen",eur(K.openPart),"var(--muted)"],
+      ["Lizenzprovision, sofort fällig",eur(K.licGross),"var(--green)"]]
+      .map(r=>'<tr><td style="color:var(--muted)">'+r[0]+'</td><td class="num" style="font-weight:600;color:'+r[2]+'">'+r[1]+'</td></tr>').join("")+'</table></div>';
+
+  const rows=K.quarters.map(q=>{
+    const col=!q.payoutDue?"var(--slate)":Math.abs(q.payoutDiff)<1&&q.received!==0?"var(--green)"
+      :q.payoutDiff<-.5?"var(--coral)":q.payoutDiff>.5?"var(--amber)":"var(--muted)";
+    return '<tr style="opacity:'+(q.payoutDue?1:.55)+'"><td><b>'+MONTHS[q.payoutMonth]+' '+q.payoutYear+'</b>'+
+      (!q.payoutDue?'<span class="tag" style="background:var(--paper);color:var(--slate);border:1px solid var(--line)">steht aus</span>':'')+'</td>'+
+      '<td style="text-align:left;color:var(--muted)">Q'+(q.q+1)+'</td>'+
+      '<td class="num" style="font-weight:600">'+eur(q.comDue)+'</td>'+
+      '<td><input class="rt num" style="width:120px" value="'+numf(q.received)+'" data-act="payout" data-q="'+q.q+'"></td>'+
+      '<td class="num" style="font-weight:600;color:'+col+'">'+(q.payoutDue?(q.payoutDiff>0?"+":"")+eur(q.payoutDiff):"–")+'</td></tr>';
+  }).join("");
+
+  const right='<div class="card pad" style="margin-top:0"><h2 class="sec">Abgleich Lohnzettel</h2>'+
+    '<div class="hint" style="margin:6px 0 14px">Abgerechnet wird quartalsweise: Q1 im April, Q2 im Juli, Q3 im Oktober und Q4 im Januar des Folgejahres.</div>'+
+    '<table><thead><tr><th style="background:var(--plumSoft);color:var(--plum)">Auszahlung</th>'+
+    '<th style="background:var(--plumSoft);color:var(--plum);text-align:left">für</th>'+
+    ['Fällig','Erhalten','Differenz'].map(h=>'<th style="background:var(--plumSoft);color:var(--plum)">'+h+'</th>').join("")+
+    '</tr></thead><tbody>'+rows+
+    '<tr style="border-top:2px solid var(--plum)"><td colspan="2"><b>Summe fälliger Termine</b></td>'+
+    '<td class="num"><b>'+eur(K.dueSettled)+'</b></td><td class="num"><b>'+eur(K.paid)+'</b></td>'+
+    '<td class="num" style="color:var(--plum)"><b>'+(K.diff>0?"+":"")+eur(K.diff)+'</b></td></tr></tbody></table>'+
+    '<div style="margin-top:16px;border:1px solid '+st.color+';border-radius:8px;overflow:hidden">'+
+    '<div style="background:'+st.color+';color:#fff;padding:8px 14px;font-weight:600">'+st.label+'</div>'+
+    '<div style="background:'+st.bg+';padding:12px 14px">'+esc(st.text)+
+    (K.duePending>0?'<div class="hint" style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-top:8px">Für spätere Termine sind bereits <b>'+eur(K.duePending)+'</b> aufgelaufen. Dieser Betrag zählt hier noch nicht mit.</div>':'')+
+    '</div></div></div>';
+
+  document.getElementById("settleWrap").innerHTML=left+right;
+}
+
+function renderMonths(K,data){
+  const cols=["Monat","Umsatz gewertet","Anteil am Jahr","Lizenzumsatz","Lizenzprovision"].concat(data.usePipeline?["Pipeline"]:[]);
+  let body="";
+  K.quarters.forEach(q=>{
+    q.ms.forEach(m=>{
+      const mo=K.monthly[m];
+      body+='<tr><td>'+MONTHS[m]+'</td><td class="num">'+eur(mo.target)+'</td>'+
+        '<td class="num" style="color:var(--muted)">'+(K.revenue>0?pct(mo.target/K.revenue):"–")+'</td>'+
+        '<td class="num">'+(mo.licence?eur(mo.licence):"–")+'</td>'+
+        '<td class="num" style="color:var(--green)">'+(mo.licenceGross?eur(mo.licenceGross):"–")+'</td>'+
+        (data.usePipeline?'<td class="num" style="color:var(--amber)">'+(mo.pipeline?eur(mo.pipeline):"–")+'</td>':'')+'</tr>';
+    });
+    body+='<tr class="qtot"><td>Q'+(q.q+1)+' gesamt</td><td class="num">'+eur(q.revenue)+'</td>'+
+      '<td class="num">'+pct(q.share)+'</td><td class="num">'+eur(q.licence)+'</td>'+
+      '<td class="num" style="color:var(--green)">'+eur(q.comLicence)+'</td>'+
+      (data.usePipeline?'<td class="num">'+eur(q.pipeline)+'</td>':'')+'</tr>';
+  });
+  document.getElementById("monthsTable").innerHTML='<h2 class="sec" style="padding:20px 20px 0">Monatsübersicht '+YKEY()+'</h2>'+
+    '<table style="margin-top:12px"><thead><tr>'+cols.map(c=>'<th>'+c+'</th>').join("")+'</tr></thead><tbody>'+body+
+    '<tr class="ytot"><td>Jahr gesamt</td><td class="num">'+eur(K.revenue)+'</td><td class="num">'+(K.yearTarget>0?pct(K.ach):"–")+
+    '</td><td class="num">'+eur(K.licence)+'</td><td class="num">'+eur(K.licGross)+'</td>'+
+    (data.usePipeline?'<td class="num">'+eur(K.pipeline)+'</td>':'')+'</tr></tbody></table>';
+}
+
+/* ---------------- Panels ---------------- */
+function renderPanels(K,data,p,y){
+  const help=document.getElementById("panelHelp"), set=document.getElementById("panelSettings"), io=document.getElementById("panelIo");
+  help.classList.toggle("hidden",panel!=="help");
+  set.classList.toggle("hidden",panel!=="settings");
+  io.classList.toggle("hidden",panel!=="io");
+
+  if(panel==="help"){
+    const items=[
+      ["1 · Mitarbeiter wählen","Oben links das Profil anklicken oder über das Plus neu anlegen. Jedes Profil hat eigene Ziele und Zahlen."],
+      ["2 · Geschäftsjahr wählen","Rechts daneben das Jahr wählen. Vorjahre bleiben als Archiv erhalten."],
+      ["3 · Ziele hinterlegen","Unter Stammdaten die vier Quartalsziele eintragen. Ihre Summe ergibt das Jahresziel."],
+      ["4 · Positionen erfassen","Monat aufklappen, Kunde und Nettoumsatz eintragen. Mehrere Zeilen gehen über „Liste einfügen“."],
+      ["5 · Art richtig wählen","Closing zählt einfach, wiederkehrende Closings über ×4. Managed Services und Lizenzen zählen automatisch vierfach."],
+      ["6 · Abrechnung pflegen","Die Hälfte der Provision entsteht mit dem Abschluss. Sobald der Auftrag abgerechnet ist, die zweite Hälfte per Klick freischalten. Bei Vorkasse ist alles sofort fällig."],
+      ["7 · Stufe im Blick behalten","Die Leiste zeigt die aktuelle Stufe und wie viel Umsatz bis zur nächsten fehlt."],
+      ["8 · Lohnzettel abgleichen","Ausgezahlt wird im April, Juli, Oktober und im Januar des Folgejahres. Je Termin eintragen, was auf dem Lohnzettel stand."],
+      ["9 · Gemeinsame Datei","Unter „Datei“ einmal die JSON auf dem Netzlaufwerk verbinden. Danach speichert das Tool automatisch dorthin."],
+      ["Wichtig zu wissen","Alle Beträge sind brutto ohne Umsatzsteuer und ohne Lohnabzüge. Die Stufe greift auf das gesamte Jahr und wirkt rückwirkend."]
+    ];
+    help.innerHTML='<div class="row between" style="margin-bottom:14px"><h2 class="sec">So funktioniert das Tool</h2>'+
+      '<button class="btn quiet" data-act="closePanel">Schließen</button></div><div class="grid g3">'+
+      items.map(i=>'<div class="box"><div style="font-weight:600;color:var(--plum);margin-bottom:4px">'+i[0]+'</div><div class="hint" style="color:var(--muted)">'+i[1]+'</div></div>').join("")+'</div>';
+  }
+
+  if(panel==="settings"){
+    const tiers=data.tiers.map((t,i)=>'<div class="box"><div style="font-weight:600;color:var(--plum);margin-bottom:8px;font-size:12px">'+
+      (i===0&&t.rate===0?"unter "+pct(data.tiers[1]?data.tiers[1].min:1,0)+" keine Provision":i===data.tiers.length-1?"ab "+pct(t.min,0):"ab "+pct(t.min,0)+" bis "+pct(data.tiers[i+1].min,0))+'</div>'+
+      '<div class="row"><div style="flex:1"><div class="label">ab</div><input class="rt" style="width:100%" value="'+numf(t.min*100)+' %" data-act="tierMin" data-i="'+i+'"></div>'+
+      '<div style="flex:1"><div class="label">Satz</div><input class="rt" style="width:100%" value="'+numf(t.rate*100)+' %" data-act="tierRate" data-i="'+i+'"></div></div></div>').join("");
+
+    set.innerHTML='<div class="row between" style="margin-bottom:14px"><h2 class="sec">Rahmendaten · '+esc(p.name||"dieses Profil")+' · '+y+'</h2>'+
+      '<button class="btn quiet" data-act="closePanel">Schließen</button></div>'+
+      '<div class="row" style="justify-content:flex-end;margin-bottom:12px">'+
+      (confirmAction==="delYear"?'<span style="color:var(--coral)">Jahr '+y+' wirklich löschen?</span><button class="btn solid danger" data-act="delYear">Ja</button><button class="btn quiet" data-act="cancelConfirm">Abbrechen</button>'
+        :'<button class="btn quiet" data-act="askDelYear">Jahr löschen</button>')+'</div>'+
+      '<div class="grid g4">'+
+      [0,1,2,3].map(q=>'<div><div class="label">Ziel Q'+(q+1)+'</div><input class="rt num" style="width:100%" value="'+numf(data.targets[q])+'" data-act="target" data-q="'+q+'"></div>').join("")+
+      '<div><div class="label">Anteil bei Abschluss</div><input class="rt" style="width:100%" value="'+numf(data.closingShare*100)+' %" data-act="closingShare"><div class="hint">Rest folgt der Abrechnung</div></div>'+
+      '<div><div class="label">Lizenzprovision</div><input class="rt" style="width:100%" value="'+numf(data.licenceRate*100)+' %" data-act="licenceRate"></div>'+
+      '<div><div class="label">Jahresziel</div><div class="box num" style="text-align:right;font-weight:600">'+eur(K.yearTarget)+'</div></div>'+
+      '<div><div class="label">Pipeline-Spalte</div><button class="btn" style="width:100%;justify-content:center;'+(data.usePipeline?"background:var(--amberSoft);color:var(--amber);border-color:var(--amber)":"")+'" data-act="togglePipeline">'+(data.usePipeline?"eingeblendet":"ausgeblendet")+'</button></div>'+
+      '</div>'+
+      '<h2 class="sec" style="margin-top:22px;margin-bottom:10px">Provisionsmodell</h2>'+
+      '<div class="row" style="margin-bottom:12px">'+
+      [["tiers","Staffel nach Jahresziel"],["flat","Fester Satz"]].map(m=>'<button class="btn'+((data.rateMode||"tiers")===m[0]?" solid":"")+'" style="border-radius:999px" data-act="rateMode" data-m="'+m[0]+'">'+m[1]+'</button>').join("")+'</div>'+
+      (data.rateMode==="flat"
+        ? '<div class="grid g3"><div class="box"><div class="label">Satz auf jeden Umsatz</div><input class="rt" style="width:100%" value="'+numf(data.flatRate*100)+' %" data-act="flatRate"></div>'+
+          '<div class="hint" style="grid-column:span 2;align-self:center">Der Satz gilt unabhängig von der Zielerreichung.</div></div>'
+        : '<div class="grid g4">'+tiers+'</div>')+
+      '<h2 class="sec" style="margin-top:22px;margin-bottom:10px">Darstellung</h2>'+
+      '<div class="grid g3"><div><div class="label">Unternehmen</div><input style="width:100%" value="'+esc(state.partnerName||"")+'" data-act="partnerName" placeholder="z. B. much. Consulting"></div>'+
+      '<div><div class="label">Logo</div><div class="row"><label class="btn solid">Datei wählen<input type="file" accept="image/*" class="hidden" id="logoInput"></label>'+
+      (state.logoUrl?'<img src="'+esc(state.logoUrl)+'" style="height:22px;max-width:120px;object-fit:contain"><button class="btn quiet danger" data-act="clearLogo">Entfernen</button>':'')+'</div></div>'+
+      '<div><div class="label">Logofläche</div><button class="btn" style="width:100%" data-act="togglePlate">'+(state.logoPlate===false?"Ohne weiße Fläche":"Auf weißer Fläche")+'</button></div></div>'+
+      '<div class="row" style="margin-top:22px">'+
+      (confirmAction==="reset"?'<span style="color:var(--coral)">Alle Einträge des Jahres '+y+' löschen?</span><button class="btn solid danger" data-act="resetYear">Ja, zurücksetzen</button><button class="btn quiet" data-act="cancelConfirm">Abbrechen</button>'
+        :'<button class="btn quiet danger" data-act="askReset">Jahr '+y+' zurücksetzen</button>')+'</div>';
+  }
+
+  if(panel==="io"){
+    io.innerHTML='<div class="row between" style="margin-bottom:10px"><h2 class="sec">Datei, Export und Sicherung</h2>'+
+      '<button class="btn quiet" data-act="closePanel">Schließen</button></div>'+
+      '<div class="grid g2">'+
+      '<div class="box"><div style="font-weight:600;color:var(--plum);margin-bottom:6px">Gemeinsame Datei</div>'+
+      '<div class="hint" style="margin-bottom:10px">'+(fileHandle
+        ? 'Verbunden. Jede Änderung wird automatisch in die Datei geschrieben. Vor dem Bearbeiten kurz neu laden, falls jemand anderes daran gearbeitet hat.'
+        : 'Noch nicht verbunden. Die Daten liegen nur in diesem Browser. Verbinde die JSON-Datei auf dem gemeinsamen Laufwerk, damit alle denselben Stand sehen.')+'</div>'+
+      '<div class="row">'+
+      '<button class="btn solid" data-act="openShared">Datei verbinden</button>'+
+      '<button class="btn" data-act="createShared">Neue Datei anlegen</button>'+
+      (fileHandle?'<button class="btn" data-act="reloadShared">Neu laden</button><button class="btn quiet" data-act="disconnect">Trennen</button>':'')+
+      '</div></div>'+
+      '<div class="box"><div style="font-weight:600;color:var(--plum);margin-bottom:6px">Export</div>'+
+      '<div class="hint" style="margin-bottom:10px">'+esc(p.name||"Aktueller Mitarbeiter")+' · Geschäftsjahr '+y+'</div>'+
+      '<div class="row"><button class="btn solid" data-act="expExcel">Excel</button>'+
+      '<button class="btn" data-act="expCsv">CSV</button>'+
+      '<button class="btn" data-act="expJson">JSON-Sicherung</button></div>'+
+      '<div class="hint" style="margin-top:10px">Die JSON-Sicherung enthält alle Mitarbeiter und Jahre.</div>'+
+      '<div class="row" style="margin-top:10px"><label class="btn">JSON importieren<input type="file" accept=".json,application/json" class="hidden" id="importInput"></label></div>'+
+      '</div></div>';
+  }
+}
+
+/* ================================================================= */
+/*  Export                                                           */
+/* ================================================================= */
+function exportRows(){
+  const p=P(),data=D(),y=YKEY();
+  const rows=[["Vertriebler","Jahr","Monat","Art","Kunde","Notiz","Betrag","Faktor","Gewertet","Abgerechnet","Vorkasse"]];
+  for(let m=0;m<12;m++)(data.deals[m]||[]).forEach(d=>rows.push([p.name,y,MONTHS[m],TYPES[d.type].label,d.customer,d.note||"",
+    Number(d.amount)||0,typeFactor(d),dealValue(d),TYPES[d.type].target?(d.billed?"ja":"nein"):"",
+    TYPES[d.type].target?(d.prepaid?"ja":"nein"):""]));
+  return rows;
+}
+function summaryRows(){
+  const K=calc(),p=P(),y=YKEY();
+  const r=[["Kennzahl","Wert"],["Vertriebler",p.name],["Geschäftsjahr",y],["Jahresziel",K.yearTarget],
+    ["Provisionsrelevanter Umsatz",K.revenue],["Zielerreichung",K.ach],
+    ["Provisionsmodell",K.flat?"Fester Satz":"Staffel"],["Provisionssatz",K.rate],
+    ["Provision auf Umsatz",K.gross],["Lizenzumsatz",K.licence],["Lizenzprovision",K.licGross],
+    ["Provision gesamt",K.commissionTotal],["Anteil bei Abschluss",K.closingPart],
+    ["Anteil aus Abrechnung",K.billedPart],["Noch offen",K.openPart],
+    ["Fällig aus erreichten Terminen",K.dueSettled],["Laut Lohnzettel erhalten",K.paid],["Differenz",K.diff],[],
+    ["Quartal","Umsatz","Provision gesamt","Bei Abschluss","Aus Abrechnung","Lizenzen","Fällig","Noch offen","Status"]];
+  K.quarters.forEach(q=>r.push(["Q"+(q.q+1),q.revenue,q.comTotal,q.comClosing,q.comBilled,q.comLicence,q.comDue,q.comOpen,
+    q.closed?"abgeschlossen":q.current?"läuft":"offen"]));
+  r.push([]);r.push(["Auszahlungstermin","für","Fällig","Erhalten","Differenz","Status"]);
+  K.quarters.forEach(q=>r.push([MONTHS[q.payoutMonth]+" "+q.payoutYear,"Q"+(q.q+1),q.comDue,q.received,q.payoutDiff,
+    q.payoutDue?"fällig":"steht aus"]));
+  return r;
+}
+function fileBase(ext){
+  const p=P();
+  return "provision-"+(p.name||"vertrieb").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"-"+YKEY()+"."+ext;
+}
+function download(content,filename,mime){
+  const blob=content instanceof Blob?content:new Blob([content],{type:mime});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+function expCsv(){
+  const cell=c=>typeof c==="number"?String(c).replace(".",","):'"'+String(c??"").replace(/"/g,'""')+'"';
+  const body=[...exportRows(),[],...summaryRows()].map(r=>r.map(cell).join(";")).join("\n");
+  download("\uFEFF"+body,fileBase("csv"),"text/csv;charset=utf-8");
+}
+function sheetXml(name,rows){
+  return '<Worksheet ss:Name="'+name+'"><Table>'+rows.map(r=>'<Row>'+r.map(c=>{
+    const num=typeof c==="number"&&Number.isFinite(c);
+    return '<Cell><Data ss:Type="'+(num?"Number":"String")+'">'+esc(num?c:(c??""))+'</Data></Cell>';
+  }).join("")+'</Row>').join("")+'</Table></Worksheet>';
+}
+function expExcel(){
+  const xml='<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n'+
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+
+    sheetXml("Positionen",exportRows())+sheetXml("Zusammenfassung",summaryRows())+'</Workbook>';
+  download(xml,fileBase("xls"),"application/vnd.ms-excel");
+}
+function expJson(){ download(JSON.stringify(state,null,2),fileBase("json"),"application/json"); }
+
+/* ================================================================= */
+/*  Bilder                                                           */
+/* ================================================================= */
+function readImage(file,cb,onErr){
+  const finish=(img,src)=>{
+    try{
+      const S=320,c=document.createElement("canvas");c.width=S;c.height=S;
+      const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,S,S);
+      const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,side=Math.min(w,h);
+      x.drawImage(img,(w-side)/2,(h-side)/2,side,side,0,0,S,S);
+      cb(c.toDataURL("image/jpeg",.85));
+    }catch(e){ cb(src); }
+  };
+  const viaReader=()=>{const r=new FileReader();
+    r.onload=()=>{const i=new Image();i.onload=()=>finish(i,String(r.result));i.onerror=onErr;i.src=String(r.result);};
+    r.onerror=onErr;r.readAsDataURL(file);};
+  try{const url=URL.createObjectURL(file);const i=new Image();
+    i.onload=()=>{finish(i,null);URL.revokeObjectURL(url);};
+    i.onerror=()=>{URL.revokeObjectURL(url);viaReader();};i.src=url;}catch(e){viaReader();}
+}
+
+/* ================================================================= */
+/*  Ereignisse                                                       */
+/* ================================================================= */
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-act],[data-panel]"); if(!t)return;
+  if(t.dataset.panel){panel=panel===t.dataset.panel?"":t.dataset.panel;render();
+    const el=document.getElementById(t.dataset.panel==="help"?"panelHelp":t.dataset.panel==="settings"?"panelSettings":"panelIo");
+    if(panel)setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"start"}),60);
+    return;}
+  const a=t.dataset.act, m=Number(t.dataset.m), id=t.dataset.id, q=Number(t.dataset.q);
+  const data=D();
+  switch(a){
+    case "closePanel": panel=""; render(); break;
+    case "selProfile": state.activeProfileId=id; save(); break;
+    case "askProfile": newNameOpen=true; render(); break;
+    case "cancelProfile": newNameOpen=false; render(); break;
+    case "createProfile": {
+      const v=(document.getElementById("newNameInput").value||"").trim();
+      const np=newProfile(v,new Date().getFullYear());
+      state.profiles.push(np); state.activeProfileId=np.id; newNameOpen=false; save();
+      flash('Mitarbeiter „'+(v||"ohne Namen")+'" angelegt.'); break;}
+    case "askDelProfile": confirmAction="del:"+id; render(); break;
+    case "cancelConfirm": confirmAction=""; render(); break;
+    case "delProfile": {
+      if(state.profiles.length===1){flash("Der letzte Mitarbeiter kann nicht gelöscht werden.");confirmAction="";render();break;}
+      const i=state.profiles.findIndex(x=>x.id===id);
+      state.profiles.splice(i,1);
+      if(state.activeProfileId===id)state.activeProfileId=state.profiles[Math.min(i,state.profiles.length-1)].id;
+      confirmAction=""; save(); flash("Mitarbeiter gelöscht."); break;}
+    case "moveProfile": {
+      const i=state.profiles.findIndex(x=>x.id===id), to=i+Number(t.dataset.dir);
+      if(to<0||to>=state.profiles.length)break;
+      const arr=state.profiles;[arr[i],arr[to]]=[arr[to],arr[i]];save();break;}
+    case "selYear": P().activeYear=t.dataset.y; save(); break;
+    case "askYear": newYearOpen=true; render(); break;
+    case "cancelYear": newYearOpen=false; render(); break;
+    case "createYear": {
+      const v=String(parseInt(document.getElementById("newYearInput").value,10));
+      if(!/^\d{4}$/.test(v)){flash("Bitte eine vierstellige Jahreszahl eingeben.");break;}
+      const p=P(); p.years=p.years||{};
+      if(!p.years[v]){
+        const fresh=emptyYear();
+        if(document.getElementById("carryOver").checked)
+          Object.assign(fresh,{targets:[...data.targets],tiers:data.tiers.map(x=>({...x})),
+            closingShare:data.closingShare,licenceRate:data.licenceRate,usePipeline:data.usePipeline,
+            rateMode:data.rateMode,flatRate:data.flatRate});
+        p.years[v]=fresh;
+      }
+      p.activeYear=v; newYearOpen=false; save(); break;}
+    case "askDelYear": confirmAction="delYear"; render(); break;
+    case "delYear": {
+      const p=P(), ys=Object.keys(p.years);
+      if(ys.length===1){flash("Das letzte Jahr kann nicht gelöscht werden.");confirmAction="";render();break;}
+      delete p.years[YKEY()]; p.activeYear=Object.keys(p.years).sort().pop(); confirmAction=""; save(); break;}
+    case "askReset": confirmAction="reset"; render(); break;
+    case "resetYear": patchYear(emptyYear()); confirmAction=""; flash("Jahr zurückgesetzt."); break;
+    case "toggleMonth": openMonth=openMonth===m?-1:m; pasteFor=null; pasteReview=null; render(); break;
+    case "toggleRec": setDeals(m,l=>l.map(x=>x.id===id?{...x,recurring:!x.recurring}:x)); break;
+    case "togglePre": setDeals(m,l=>l.map(x=>x.id===id?{...x,prepaid:!x.prepaid}:x)); break;
+    case "toggleBilled": setDeals(m,l=>l.map(x=>x.id===id?{...x,billed:x.billed?0:1}:x)); break;
+    case "delDeal": setDeals(m,l=>l.filter(x=>x.id!==id)); break;
+    case "dupDeal": setDeals(m,l=>{const i=l.findIndex(x=>x.id===id);if(i<0)return l;
+      return [...l.slice(0,i+1),{...l[i],id:uid()},...l.slice(i+1)];}); break;
+    case "addDeal": {
+      const amount=parseAmount(document.getElementById("na"+m).value);
+      if(!Number.isFinite(amount)||amount===0){flash("Bitte einen Betrag eintragen.");break;}
+      setDeals(m,l=>[...l,{id:uid(),
+        customer:(document.getElementById("nc"+m).value||"").trim()||"Ohne Bezeichnung",
+        note:(document.getElementById("nn"+m).value||"").trim(),amount,
+        type:document.getElementById("nt"+m).value,
+        recurring:document.getElementById("nr"+m).checked,
+        prepaid:document.getElementById("np"+m).checked,billed:0}]);
+      break;}
+    case "openPaste": pasteFor=m; pasteReview=null; render(); break;
+    case "closePaste": pasteFor=null; pasteReview=null; render(); break;
+    case "backPaste": pasteReview=null; render(); break;
+    case "checkPaste": {
+      const type=document.getElementById("pasteType").value;
+      const parsed=parsePaste(document.getElementById("pasteArea").value).map(d=>({...d,type}));
+      const all=Object.values(D().deals).flat();
+      const key=d=>d.customer.trim().toLowerCase()+"|"+Math.round(dealValue(d));
+      const ex=new Set(all.map(key)), fresh=[], dupes=[];
+      parsed.forEach(d=>(ex.has(key(d))?dupes:fresh).push(d));
+      pasteReview={fresh,dupes}; render(); break;}
+    case "commitPaste": {
+      const list=t.dataset.all==="1"?[...pasteReview.fresh,...pasteReview.dupes]:pasteReview.fresh;
+      if(list.length)setDeals(m,l=>[...l,...list]);
+      pasteFor=null; pasteReview=null; render(); break;}
+    case "rateMode": patchYear({rateMode:t.dataset.m}); break;
+    case "togglePipeline": patchYear({usePipeline:!data.usePipeline}); break;
+    case "togglePlate": state.logoPlate=state.logoPlate===false; save(); break;
+    case "clearLogo": state.logoUrl=""; save(); break;
+    case "openShared": chooseSharedFile(); break;
+    case "createShared": createSharedFile(); break;
+    case "reloadShared": reloadShared(); break;
+    case "disconnect": disconnectShared(); break;
+    case "expCsv": expCsv(); break;
+    case "expExcel": expExcel(); break;
+    case "expJson": expJson(); break;
+  }
+});
+
+document.addEventListener("change",e=>{
+  const t=e.target; const a=t.dataset.act;
+  if(t.id==="photoInput"&&t.files[0]){
+    readImage(t.files[0],src=>{patchProfile({photo:src});},()=>flash("Dieses Bildformat kann der Browser nicht darstellen."));
+    setTimeout(()=>{t.value="";},1500); return;
+  }
+  if(t.id==="logoInput"&&t.files[0]){
+    const f=t.files[0];
+    if(f.size>2*1024*1024){flash("Die Datei ist größer als 2 MB.");return;}
+    const r=new FileReader();r.onload=()=>{state.logoUrl=String(r.result);save();};r.readAsDataURL(f);
+    setTimeout(()=>{t.value="";},1500); return;
+  }
+  if(t.id==="importInput"&&t.files[0]){
+    const r=new FileReader();
+    r.onload=()=>{try{
+      const parsed=JSON.parse(String(r.result));
+      if(!parsed||!parsed.profiles)throw 0;
+      const n=parsed.profiles.length;
+      if(confirm("Datei enthält "+n+" Mitarbeiter.\n\nOK ersetzt den gesamten Stand.\nAbbrechen fügt sie zusätzlich hinzu.")){
+        state=parsed; normalize(); flash("Stand ersetzt.");
+      }else{
+        parsed.profiles.forEach(pr=>{pr.id=uid();state.profiles.push(pr);});
+        flash(n+" Mitarbeiter hinzugefügt.");
+      }
+      save();
+    }catch(err){flash("Die Datei ist keine gültige Sicherung.");}};
+    r.readAsText(t.files[0]); setTimeout(()=>{t.value="";},1500); return;
+  }
+  if(!a)return;
+  const m=Number(t.dataset.m), id=t.dataset.id, q=Number(t.dataset.q), i=Number(t.dataset.i);
+  const data=D();
+  switch(a){
+    case "dealField": setDeals(m,l=>l.map(x=>x.id===id?{...x,[t.dataset.f]:t.value}:x)); break;
+    case "dealAmount": setDeals(m,l=>l.map(x=>x.id===id?{...x,amount:parseAmount(t.value)||0}:x)); break;
+    case "moveDeal": {
+      const to=Number(t.value); if(to===m)break;
+      const deal=(data.deals[m]||[]).find(x=>x.id===id); if(!deal)break;
+      const deals={...data.deals};
+      deals[m]=deals[m].filter(x=>x.id!==id); deals[to]=[...(deals[to]||[]),deal];
+      patchYear({deals}); break;}
+    case "qTarget": case "target": {
+      const tg=[...data.targets]; tg[q]=parseAmount(t.value)||0; patchYear({targets:tg}); break;}
+    case "payout": {
+      const pq=[...(data.payoutsQ||[0,0,0,0])]; pq[q]=parseAmount(t.value)||0; patchYear({payoutsQ:pq}); break;}
+    case "closingShare": patchYear({closingShare:(parseAmount(t.value)||0)/100}); break;
+    case "licenceRate": patchYear({licenceRate:(parseAmount(t.value)||0)/100}); break;
+    case "flatRate": patchYear({flatRate:(parseAmount(t.value)||0)/100}); break;
+    case "tierMin": patchYear({tiers:data.tiers.map((x,j)=>j===i?{...x,min:(parseAmount(t.value)||0)/100}:x)}); break;
+    case "tierRate": patchYear({tiers:data.tiers.map((x,j)=>j===i?{...x,rate:(parseAmount(t.value)||0)/100}:x)}); break;
+    case "partnerName": state.partnerName=t.value; save(); break;
+  }
+});
+
+document.getElementById("nameInput").addEventListener("change",e=>patchProfile({name:e.target.value}));
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Enter")return;
+  if(e.target.id&&/^n[cna]\d+$/.test(e.target.id)){
+    const m=e.target.id.replace(/^n[cna]/,"");
+    document.querySelector('[data-act="addDeal"][data-m="'+m+'"]').click();
+  }
+  if(e.target.id==="newNameInput")document.querySelector('[data-act="createProfile"]').click();
+  if(e.target.id==="newYearInput")document.querySelector('[data-act="createYear"]').click();
+});
+
+/* ================================================================= */
+/*  Start                                                            */
+/* ================================================================= */
+function normalize(){
+  if(!state||!state.profiles||!state.profiles.length){
+    const p=newProfile("",new Date().getFullYear());
+    state={version:3,activeProfileId:p.id,profiles:[p],partnerName:"",logoUrl:"",logoPlate:true};
+  }
+  state.profiles.forEach(p=>{
+    p.years=p.years||{};
+    if(!Object.keys(p.years).length)p.years[String(new Date().getFullYear())]=emptyYear();
+    if(!p.years[p.activeYear])p.activeYear=Object.keys(p.years).sort()[0];
+    Object.values(p.years).forEach(y=>{
+      y.tiers=y.tiers&&y.tiers.length?y.tiers:DEFAULT_TIERS.map(t=>({...t}));
+      y.payoutsQ=y.payoutsQ||[0,0,0,0];
+      y.deals=y.deals||Object.fromEntries(Array.from({length:12},(_,i)=>[i,[]]));
+      for(let i=0;i<12;i++)y.deals[i]=y.deals[i]||[];
+    });
+  });
+  if(!state.profiles.find(p=>p.id===state.activeProfileId))state.activeProfileId=state.profiles[0].id;
+}
+
+try{ state=JSON.parse(localStorage.getItem(LS_KEY)||"null"); }catch(e){ state=null; }
+normalize();
+render();
+if(!fileHandle){
+  setTimeout(()=>flash("Tipp: Unter „Datei“ die gemeinsame JSON auf dem Netzlaufwerk verbinden, damit alle denselben Stand sehen."),800);
+}
+</script>
+</body>
+</html>
