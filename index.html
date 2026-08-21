@@ -334,7 +334,10 @@ function save(){
   clearTimeout(saveTimer);
   saveTimer=setTimeout(async()=>{
     try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(e){}
-    if(fileHandle){
+    if(storageMode==="supabase"&&sb.token){
+      try{ await sbPush(); savedAt=new Date(); saveErr=""; }
+      catch(e){ saveErr="Datenbank nicht erreichbar: "+String(e.message||e).slice(0,80); }
+    }else if(fileHandle){
       try{
         const w=await fileHandle.createWritable();
         await w.write(JSON.stringify(state,null,2)); await w.close();
@@ -381,6 +384,120 @@ async function reloadShared(){
 function disconnectShared(){ fileHandle=null; flash("Verbindung getrennt. Änderungen bleiben nur in diesem Browser."); render(); }
 
 /* ================================================================= */
+/*  Supabase: Anmeldung und Datenhaltung über die REST-Schnittstelle  */
+/* ================================================================= */
+const SB_KEY="provisions-tracker-supabase";
+let sb={url:"",key:"",docId:"team",token:null,refresh:null,email:"",remoteUpdated:null,busy:false};
+let storageMode="local";
+
+function sbLoadConfig(){
+  try{
+    const c=JSON.parse(localStorage.getItem(SB_KEY)||"null");
+    if(c){sb={...sb,...c};if(sb.token)storageMode="supabase";}
+  }catch(e){}
+}
+function sbSaveConfig(){
+  try{localStorage.setItem(SB_KEY,JSON.stringify({url:sb.url,key:sb.key,docId:sb.docId,
+    token:sb.token,refresh:sb.refresh,email:sb.email}));}catch(e){}
+}
+const sbReady=()=>!!(sb.url&&sb.key);
+function sbHeaders(json){
+  const h={apikey:sb.key,Authorization:"Bearer "+(sb.token||sb.key)};
+  if(json)h["Content-Type"]="application/json";
+  return h;
+}
+async function sbAuth(path,body){
+  const r=await fetch(sb.url.replace(/\/$/,"")+"/auth/v1/"+path,
+    {method:"POST",headers:{apikey:sb.key,"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.error_description||j.msg||j.message||"Anmeldung fehlgeschlagen");
+  return j;
+}
+async function sbSignIn(email,password){
+  const j=await sbAuth("token?grant_type=password",{email,password});
+  sb.token=j.access_token;sb.refresh=j.refresh_token;sb.email=email;sbSaveConfig();
+}
+async function sbSignUp(email,password){
+  const j=await sbAuth("signup",{email,password});
+  if(j.access_token){sb.token=j.access_token;sb.refresh=j.refresh_token;sb.email=email;sbSaveConfig();return true;}
+  return false;
+}
+async function sbRefresh(){
+  if(!sb.refresh)return false;
+  try{
+    const j=await sbAuth("token?grant_type=refresh_token",{refresh_token:sb.refresh});
+    sb.token=j.access_token;sb.refresh=j.refresh_token;sbSaveConfig();return true;
+  }catch(e){return false;}
+}
+async function sbFetch(path,opts,retry){
+  const r=await fetch(sb.url.replace(/\/$/,"")+"/rest/v1/"+path,opts);
+  if(r.status===401&&!retry&&await sbRefresh()){
+    opts.headers=sbHeaders(!!opts.body);
+    return sbFetch(path,opts,true);
+  }
+  return r;
+}
+async function sbPull(silent){
+  if(!sbReady()||!sb.token){flash("Bitte zuerst anmelden.");return;}
+  try{
+    const r=await sbFetch("commission_docs?id=eq."+encodeURIComponent(sb.docId)+"&select=data,updated_at,updated_by",
+      {headers:sbHeaders(false)});
+    if(!r.ok)throw new Error(await r.text());
+    const rows=await r.json();
+    if(!rows.length){ if(!silent)flash("Für diese Team-Kennung liegen noch keine Daten. Der aktuelle Stand wird beim nächsten Speichern angelegt."); return; }
+    const row=rows[0];
+    if(!row.data||!row.data.profiles)throw new Error("Ungültiger Datensatz");
+    state=row.data; sb.remoteUpdated=row.updated_at; normalize(); render();
+    if(!silent)flash("Stand aus der Datenbank geladen"+(row.updated_by?" (zuletzt bearbeitet von "+row.updated_by+")":"")+".");
+  }catch(e){ flash("Laden fehlgeschlagen: "+String(e.message||e).slice(0,140)); }
+}
+async function sbPush(){
+  if(!sbReady()||!sb.token)return false;
+  const body=[{id:sb.docId,data:state,updated_at:new Date().toISOString(),updated_by:sb.email}];
+  const r=await sbFetch("commission_docs?on_conflict=id",
+    {method:"POST",headers:{...sbHeaders(true),Prefer:"resolution=merge-duplicates,return=representation"},
+     body:JSON.stringify(body)});
+  if(!r.ok)throw new Error((await r.text()).slice(0,160));
+  const rows=await r.json().catch(()=>[]);
+  if(rows[0])sb.remoteUpdated=rows[0].updated_at;
+  return true;
+}
+async function sbCheckConflict(){
+  if(storageMode!=="supabase"||!sb.token)return;
+  try{
+    const r=await sbFetch("commission_docs?id=eq."+encodeURIComponent(sb.docId)+"&select=updated_at,updated_by",
+      {headers:sbHeaders(false)});
+    if(!r.ok)return;
+    const rows=await r.json();
+    if(rows.length&&sb.remoteUpdated&&rows[0].updated_at>sb.remoteUpdated)
+      flash("Achtung: "+(rows[0].updated_by||"jemand")+" hat den Stand inzwischen geändert. Bitte über „Neu laden“ aktualisieren, sonst wird überschrieben.");
+  }catch(e){}
+}
+function sbSignOut(){
+  sb.token=null;sb.refresh=null;sb.email="";storageMode=fileHandle?"file":"local";
+  sbSaveConfig();flash("Abgemeldet. Änderungen bleiben lokal in diesem Browser.");render();
+}
+
+const SB_SQL=`-- Einmalig im Supabase SQL Editor ausführen
+
+create table if not exists public.commission_docs (
+  id          text primary key,
+  data        jsonb not null,
+  updated_at  timestamptz not null default now(),
+  updated_by  text
+);
+
+alter table public.commission_docs enable row level security;
+
+-- Nur angemeldete Konten dürfen lesen und schreiben
+create policy "angemeldete lesen"    on public.commission_docs
+  for select to authenticated using (true);
+create policy "angemeldete schreiben" on public.commission_docs
+  for insert to authenticated with check (true);
+create policy "angemeldete aendern"   on public.commission_docs
+  for update to authenticated using (true) with check (true);`;
+
+/* ================================================================= */
 /*  Meldungen                                                        */
 /* ================================================================= */
 let noticeTimer=null;
@@ -395,14 +512,16 @@ function flash(msg){
 /* ================================================================= */
 function renderChip(){
   const c=document.getElementById("saveChip");
-  const shared=!!fileHandle;
-  const bg=saveErr?"var(--coral)":shared?"var(--green)":"rgba(255,255,255,.16)";
+  const db=storageMode==="supabase"&&sb.token, shared=!!fileHandle&&!db;
+  const ok=db||shared;
+  const where=db?"Datenbank · ":shared?"Gemeinsame Datei · ":"Nur lokal · ";
+  const bg=saveErr?"var(--coral)":ok?"var(--green)":"rgba(255,255,255,.16)";
   const txt=saveErr?"Nicht gespeichert"
-    :savedAt?(shared?"Gemeinsame Datei · ":"Nur lokal · ")+savedAt.toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})
+    :savedAt?where+savedAt.toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})
     :"Noch nicht gespeichert";
   c.style.background=bg; c.style.color="#fff";
-  c.style.border="1px solid "+(saveErr?"var(--coral)":shared?"var(--green)":"rgba(255,255,255,.32)");
-  c.innerHTML='<span style="width:7px;height:7px;border-radius:50%;background:'+(saveErr||shared?"#fff":"var(--sun)")+'"></span>'+esc(txt);
+  c.style.border="1px solid "+(saveErr?"var(--coral)":ok?"var(--green)":"rgba(255,255,255,.32)");
+  c.innerHTML='<span style="width:7px;height:7px;border-radius:50%;background:'+(saveErr||ok?"#fff":"var(--sun)")+'"></span>'+esc(txt);
 }
 
 function render(){
@@ -812,8 +931,34 @@ function renderPanels(K,data,p,y){
   }
 
   if(panel==="io"){
-    io.innerHTML='<div class="row between" style="margin-bottom:10px"><h2 class="sec">Datei, Export und Sicherung</h2>'+
+    io.innerHTML='<div class="row between" style="margin-bottom:10px"><h2 class="sec">Speicherort, Export und Sicherung</h2>'+
       '<button class="btn quiet" data-act="closePanel">Schließen</button></div>'+
+      '<div class="box" style="margin-bottom:16px;border-color:var(--plum)">'+
+      '<div class="row between"><div style="font-weight:600;color:var(--plum)">Team-Datenbank (Supabase)</div>'+
+      '<span class="pill" style="font-size:12px;background:'+(sb.token?"var(--greenSoft)":"var(--paper)")+';color:'+(sb.token?"var(--green)":"var(--slate)")+';border:1px solid '+(sb.token?"var(--green)":"var(--line)")+'">'+
+        (sb.token?"angemeldet als "+esc(sb.email):"nicht verbunden")+'</span></div>'+
+      '<div class="hint" style="margin:6px 0 10px">Alle Mitarbeiter greifen auf denselben Datensatz zu, unabhängig vom Gerät. '+
+      'Projekt-URL und öffentlichen anon-Schlüssel findest du in Supabase unter Project Settings, API. '+
+      'Ohne Anmeldung wird nichts gelesen oder geschrieben.</div>'+
+      '<div class="grid g2" style="margin-bottom:10px">'+
+      '<div><div class="label">Projekt-URL</div><input style="width:100%" id="sbUrl" value="'+esc(sb.url)+'" placeholder="https://xxxx.supabase.co"></div>'+
+      '<div><div class="label">anon-Schlüssel</div><input style="width:100%" id="sbKey" value="'+esc(sb.key)+'" placeholder="eyJhbGciOi…"></div>'+
+      '<div><div class="label">E-Mail</div><input style="width:100%" id="sbMail" value="'+esc(sb.email)+'" placeholder="name@firma.at"></div>'+
+      '<div><div class="label">Passwort</div><input type="password" style="width:100%" id="sbPw" placeholder="••••••••"></div>'+
+      '<div><div class="label">Team-Kennung</div><input style="width:100%" id="sbDoc" value="'+esc(sb.docId)+'" placeholder="team"><div class="hint">Alle mit derselben Kennung teilen einen Stand</div></div>'+
+      '</div>'+
+      '<div class="row">'+
+      (sb.token
+        ? '<button class="btn solid" data-act="sbPull">Aus Datenbank laden</button>'+
+          '<button class="btn" data-act="sbPush">Jetzt hochladen</button>'+
+          '<button class="btn quiet" data-act="sbOut">Abmelden</button>'
+        : '<button class="btn solid" data-act="sbIn">Anmelden</button>'+
+          '<button class="btn" data-act="sbUp">Konto anlegen</button>')+
+      '<button class="btn quiet" data-act="sbSql">Einrichtungs-SQL anzeigen</button>'+
+      '</div>'+
+      '<div id="sbSqlBox" class="hidden" style="margin-top:10px"><div class="hint" style="margin-bottom:6px">Einmalig im SQL Editor des Supabase-Projekts ausführen. Danach unter Authentication die gewünschten Konten anlegen.</div>'+
+      '<textarea readonly rows="12" style="width:100%;font-family:ui-monospace,monospace;font-size:12px">'+esc(SB_SQL)+'</textarea></div>'+
+      '</div>'+
       '<div class="grid g2">'+
       '<div class="box"><div style="font-weight:600;color:var(--plum);margin-bottom:6px">Gemeinsame Datei</div>'+
       '<div class="hint" style="margin-bottom:10px">'+(fileHandle
@@ -1004,6 +1149,34 @@ document.addEventListener("click",e=>{
     case "togglePipeline": patchYear({usePipeline:!data.usePipeline}); break;
     case "togglePlate": state.logoPlate=state.logoPlate===false; save(); break;
     case "clearLogo": state.logoUrl=""; save(); break;
+    case "sbSql": document.getElementById("sbSqlBox").classList.toggle("hidden"); break;
+    case "sbIn": case "sbUp": {
+      sb.url=(document.getElementById("sbUrl").value||"").trim();
+      sb.key=(document.getElementById("sbKey").value||"").trim();
+      sb.docId=(document.getElementById("sbDoc").value||"team").trim()||"team";
+      const mail=(document.getElementById("sbMail").value||"").trim();
+      const pw=document.getElementById("sbPw").value||"";
+      if(!sb.url||!sb.key){flash("Bitte Projekt-URL und anon-Schlüssel eintragen.");break;}
+      if(!mail||!pw){flash("Bitte E-Mail und Passwort eintragen.");break;}
+      (async()=>{
+        try{
+          if(a==="sbUp"){
+            const direct=await sbSignUp(mail,pw);
+            if(!direct){flash("Konto angelegt. Bitte zuerst die Bestätigungsmail öffnen, danach anmelden.");sbSaveConfig();render();return;}
+          }else{
+            await sbSignIn(mail,pw);
+          }
+          storageMode="supabase"; sbSaveConfig();
+          await sbPull(true);
+          flash("Mit der Team-Datenbank verbunden.");
+          render();
+        }catch(e){ flash(String(e.message||e).slice(0,160)); }
+      })();
+      break;}
+    case "sbOut": sbSignOut(); break;
+    case "sbPull": sbPull(false); break;
+    case "sbPush": (async()=>{try{await sbPush();savedAt=new Date();saveErr="";renderChip();flash("Stand in die Datenbank geschrieben.");}
+      catch(e){flash("Hochladen fehlgeschlagen: "+String(e.message||e).slice(0,140));}})(); break;
     case "openShared": chooseSharedFile(); break;
     case "createShared": createSharedFile(); break;
     case "reloadShared": reloadShared(); break;
@@ -1101,10 +1274,14 @@ function normalize(){
 }
 
 try{ state=JSON.parse(localStorage.getItem(LS_KEY)||"null"); }catch(e){ state=null; }
+sbLoadConfig();
 normalize();
 render();
-if(!fileHandle){
-  setTimeout(()=>flash("Tipp: Unter „Datei“ die gemeinsame JSON auf dem Netzlaufwerk verbinden, damit alle denselben Stand sehen."),800);
+
+if(storageMode==="supabase"&&sb.token){
+  sbPull(true).then(()=>{ setInterval(sbCheckConflict,60000); });
+}else{
+  setTimeout(()=>flash("Tipp: Unter „Datei“ lässt sich eine Team-Datenbank oder eine gemeinsame Datei verbinden, damit alle denselben Stand sehen."),800);
 }
 </script>
 </body>
