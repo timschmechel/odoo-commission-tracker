@@ -36,8 +36,14 @@
   .btn.danger{color:var(--coral);border-color:var(--coral)}
   .btn.solid.danger{background:var(--coral);border-color:var(--coral);color:#fff}
   .btn:hover{opacity:.85}
-  .btn.hdr{background:transparent;color:#EADFE6;border:1px solid rgba(255,255,255,.22)}
-  .btn.hdr.on{background:#fff;color:var(--plumDeep);border-color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  /* Segmentierte Umschaltleiste im Kopf */
+  .segbar{display:inline-flex;gap:2px;padding:3px;border-radius:9px;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18)}
+  .btn.hdr{background:transparent;color:#E4D8E2;border:1px solid transparent;
+    padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;letter-spacing:.01em;
+    transition:background .14s,color .14s}
+  .btn.hdr:hover{background:rgba(255,255,255,.14);color:#fff;opacity:1}
+  .btn.hdr.on{background:#fff;color:var(--plum);box-shadow:0 1px 3px rgba(26,17,28,.25)}
   input,select,textarea{font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);
     border-radius:6px;padding:8px 10px;outline:none}
   input:focus,select:focus,textarea:focus{border-color:var(--plum)}
@@ -54,17 +60,24 @@
   tr.ytot td{background:var(--plumDeep);color:#fff;font-weight:600;border-top:none}
   .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 12px;font-size:13px;font-weight:500}
   .tag{display:inline-block;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:600;margin-left:8px}
-  .kpis{display:grid;gap:1px;background:rgba(255,255,255,.14);border-radius:10px;overflow:hidden;margin-top:24px;
-    grid-template-columns:repeat(5,1fr)}
-  .kpi{background:var(--plumDeep);padding:14px 18px}
-  .kpi .v{font-size:22px;font-weight:600;margin-top:3px}
-  .kpi .s{font-size:11px;color:#BCA8B8;margin-top:2px}
+  .kpis{display:grid;gap:12px;margin-top:24px;grid-template-columns:repeat(5,1fr)}
+  .kpi{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:10px;
+    padding:16px 18px 14px;display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden}
+  .kpi .k{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.13em;color:#C9B7C6}
+  .kpi .v{font-size:26px;font-weight:600;line-height:1.05}
+  .kpi .s{font-size:11px;color:#EADFE6;background:rgba(255,255,255,.12);border-radius:999px;
+    padding:4px 10px;align-self:flex-start;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .bar{position:absolute;left:0;top:0;bottom:0;width:3px}
   .month{border-top:1px solid var(--line)}
   .month>.head{display:flex;align-items:center;gap:12px;padding:11px 16px;cursor:pointer}
   .month>.head:hover{background:#fff}
   .month.open>.head{background:#fff}
   .month .name{width:100px;font-weight:500}
-  .deal{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 8px;border-top:1px solid var(--paper)}
+  .deal{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;padding:6px 8px;border-top:1px solid var(--paper);
+    overflow-x:auto;scrollbar-width:thin}
+  .deal>*{flex-shrink:0}
+  .deal .grow{flex:1 1 auto;min-width:90px}
+  .chip{display:inline-flex;align-items:center;gap:6px;border-radius:5px;padding:3px 8px;font-size:12px;font-weight:600;white-space:nowrap}
   .avatar{width:76px;height:76px;border-radius:50%;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,.14);
     border:2px solid rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;cursor:pointer}
   .avatar img{width:100%;height:100%;object-fit:cover}
@@ -76,6 +89,15 @@
   .box{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px}
   .hint{font-size:12px;color:var(--slate)}
   .hidden{display:none!important}
+  .panel{border-color:var(--line);box-shadow:0 6px 22px rgba(31,27,34,.09)}
+  .panel .phead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+    margin:-20px -20px 16px;padding:14px 20px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#FBF9FB 0%,#fff 100%);border-radius:9px 9px 0 0}
+  .panel .phead h2{margin:0}
+  .panel .phead .sub{font-size:12px;color:var(--muted);margin-top:3px}
+  .panel .close{border:1px solid var(--line);background:#fff;color:var(--muted);
+    border-radius:6px;padding:5px 10px;font-size:12px;font-weight:500}
+  .panel .close:hover{color:var(--plum);border-color:var(--plum)}
   .hit{cursor:crosshair}
   .hit:hover{fill:rgba(113,75,103,.055)}
   .ladder{position:relative;height:40px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;display:flex}
@@ -134,10 +156,12 @@
         <div class="label light" style="margin-bottom:6px">Geschäftsjahr</div>
         <div class="row" id="yearChips"></div>
       </div>
-      <div class="row" style="margin-left:auto">
-        <button class="btn hdr" data-panel="help">Anleitung</button>
-        <button class="btn hdr" data-panel="settings">Stammdaten</button>
-        <button class="btn hdr" data-panel="io">Datei</button>
+      <div style="margin-left:auto">
+        <div class="segbar">
+          <button class="btn hdr" data-panel="help">Anleitung</button>
+          <button class="btn hdr" data-panel="settings">Stammdaten</button>
+          <button class="btn hdr" data-panel="io">Datei</button>
+        </div>
       </div>
     </div>
 
@@ -161,9 +185,9 @@
 
 <main class="wrap" style="padding-bottom:60px">
   <div id="notice" class="note hidden"></div>
-  <section id="panelHelp" class="card pad hidden" style="border-color:var(--plum);border-top:3px solid var(--plum)"></section>
-  <section id="panelSettings" class="card pad hidden" style="border-color:var(--plum);border-top:3px solid var(--plum)"></section>
-  <section id="panelIo" class="card pad hidden" style="border-color:var(--plum);border-top:3px solid var(--plum)"></section>
+  <section id="panelHelp" class="card pad hidden panel"></section>
+  <section id="panelSettings" class="card pad hidden panel"></section>
+  <section id="panelIo" class="card pad hidden panel"></section>
   <section id="tier" class="card pad mint"></section>
   <section id="chart" class="card pad sun"></section>
   <div id="quarters"></div>
@@ -246,7 +270,7 @@ const newProfile=(name,year)=>({id:uid(),name,activeYear:String(year),years:{[St
 /*  Zustand                                                          */
 /* ================================================================= */
 let state=null, openMonth=new Date().getMonth(), panel="", savedAt=null, saveErr="";
-let billFor=null, pasteFor=null, pasteReview=null, confirmAction="", newNameOpen=false, newYearOpen=false;
+let billFor=null, billYk=null, pasteFor=null, pasteReview=null, confirmAction="", newNameOpen=false, newYearOpen=false;
 
 const P=()=>state.profiles.find(p=>p.id===state.activeProfileId)||state.profiles[0];
 const YKEY=()=>P().activeYear;
@@ -255,6 +279,24 @@ const D=()=>({...emptyYear(),...((P().years||{})[YKEY()]||{})});
 function patchProfile(patch){const p=P();Object.assign(p,patch);save();}
 function patchYear(patch){const p=P();p.years=p.years||{};p.years[YKEY()]={...D(),...patch};save();}
 function setDeals(m,fn){const d=D();const deals={...d.deals};deals[m]=fn(deals[m]||[]);patchYear({deals});}
+
+/* Rechnungen können zu Projekten aus anderen Jahren gehören: diese Helfer treffen das richtige Jahr */
+function dealYearKey(){ return billYk||YKEY(); }
+function findDeal(m,id){
+  const yd=(P().years||{})[dealYearKey()]||{};
+  return ((yd.deals||{})[m]||[]).find(x=>x.id===id);
+}
+function writeDeal(m,id,fn){
+  setDealsIn(dealYearKey(),m,l=>l.map(x=>x.id===id?fn(x):x));
+}
+
+/* Schreibzugriff auf ein beliebiges Geschäftsjahr, für Projekte mit Laufzeit über den Jahreswechsel */
+function setDealsIn(yk,m,fn){
+  const p=P(); p.years=p.years||{};
+  const yd={...emptyYear(),...(p.years[yk]||{})};
+  const deals={...yd.deals}; deals[m]=fn(deals[m]||[]);
+  p.years[yk]={...yd,deals}; save();
+}
 
 /* ================================================================= */
 /*  Berechnung                                                       */
@@ -286,15 +328,26 @@ function calc(){
       const a=dealAccrual(d,tier.rate,share);
       closingPart+=a.atClosing; openPart+=a.open;
       qB[qi].closing+=a.atClosing; qB[qi].total+=a.atClosing; qB[qi].open+=a.open;
-      if(d.prepaid)qB[qi].prepaid+=a.total;
-      /* Jede Rechnung wirkt im Monat ihrer Fakturierung */
-      a.bills.forEach(b=>{
-        const bq=Math.floor(Math.min(Math.max(b.m,0),11)/3);
-        billedPart+=b.com; qB[bq].billed+=b.com; qB[bq].total+=b.com;
-      });});}
+      if(d.prepaid)qB[qi].prepaid+=a.total;});}
+
+  /* Rechnungen aller Jahre: eine Faktura wirkt im Quartal ihres eigenen Datums,
+     auch wenn der Auftrag in einem früheren Geschäftsjahr gewonnen wurde. */
+  const thisYear=Number(YKEY());
+  let carryBilled=0, carryOpen=0;
+  allDealsAcrossYears().forEach(x=>{
+    const fremd=Number(x.yearKey)!==thisYear;
+    if(fremd&&x.acc.open>0)carryOpen+=x.acc.open;
+    x.acc.bills.forEach(b=>{
+      if(Number(b.y!=null?b.y:x.yearKey)!==thisYear)return;
+      const bq=Math.floor(Math.min(Math.max(b.m,0),11)/3);
+      billedPart+=b.com; qB[bq].billed+=b.com; qB[bq].total+=b.com;
+      if(fremd)carryBilled+=b.com;
+    });
+  });
 
   const licGross=licence*data.licenceRate;
-  const commissionTotal=gross+licGross;
+  /* Provision aus Vorjahresprojekten, die in diesem Jahr fakturiert wurden, zählt mit */
+  const commissionTotal=gross+licGross+carryBilled;
 
   const fTotal=revenue+pipeline;
   const fAch=yearTarget>0?fTotal/yearTarget:0;
@@ -329,6 +382,7 @@ function calc(){
   const paid=quarters.reduce((a,q)=>a+q.received,0);
 
   return{data,monthly,quarters,yearTarget,revenue,pipeline,licence,ach,rate:tier.rate,flat,
+    carryBilled,carryOpen,
     gross,licGross,commissionTotal,closingPart,billedPart,openPart,shareRate:share,
     due:closingPart+billedPart+licGross,fAch,fRate:fTier.rate,forecastTotal:fTotal*fTier.rate+licGross,
     step,payoutsDueCount,dueSettled,duePending,paid,diff:paid-dueSettled};
@@ -341,10 +395,9 @@ function payrollState(diff,paid,dueCount){
     text:"Sobald eine Provisionszahlung eingegangen ist, hier erfassen."};
   if(Math.abs(diff)<1)return{key:"ok",color:"var(--green)",bg:"var(--greenSoft)",label:"Stimmt überein",
     text:"Die Auszahlung entspricht der Berechnung."};
-  if(diff<0)return{key:"short",color:"var(--coral)",bg:"var(--coralSoft)",label:"Es fehlt Provision",
-    text:"Der ausgezahlte Betrag liegt unter dem fälligen Anspruch. Differenz mit der Abrechnung vergleichen und bei der Personalverrechnung nachfragen."};
+  if(diff<0)return{key:"short",color:"var(--coral)",bg:"var(--coralSoft)",label:"Δ Provisionsberechnung",text:""};
   return{key:"over",color:"var(--amber)",bg:"var(--amberSoft)",label:"Zu viel ausgezahlt",
-    text:"Es wurde mehr ausgezahlt als berechnet. Zuerst Abrechnungsstand und Vorkasse prüfen. Bleibt die Differenz, den Team Lead kontaktieren."};
+    text:"Es wurde mehr ausgezahlt als berechnet. Zuerst Fakturierungsstand und sofort fällige Positionen prüfen. Bleibt die Differenz, den Team Lead kontaktieren."};
 }
 
 /* ================================================================= */
@@ -372,7 +425,8 @@ const SB_KEY="provisions-tracker-supabase";
    der Zugriff wird über Row Level Security und die Anmeldung geregelt. */
 const SB_DEFAULT_URL="https://kbojvmejkbbhcgrslnrt.supabase.co";
 const SB_DEFAULT_KEY="sb_publishable_2hHliH2u82ZM8NY43UtgzA_X1wdqmCM";
-let sb={url:SB_DEFAULT_URL,key:SB_DEFAULT_KEY,docId:"team",token:null,refresh:null,
+const SB_DEFAULT_DOC="team_de";
+let sb={url:SB_DEFAULT_URL,key:SB_DEFAULT_KEY,docId:SB_DEFAULT_DOC,token:null,refresh:null,
   email:"",device:"",remoteUpdated:null,busy:false};
 let storageMode="local";
 
@@ -385,6 +439,7 @@ function sbLoadConfig(){
       Object.keys(c).forEach(k=>{ if(c[k])sb[k]=c[k]; });
       if(!sb.url)sb.url=SB_DEFAULT_URL;
       if(!sb.key)sb.key=SB_DEFAULT_KEY;
+      if(!sb.docId||sb.docId==="team")sb.docId=SB_DEFAULT_DOC;
     }
   }catch(e){}
 }
@@ -570,15 +625,19 @@ function renderChips(p,y){
 function renderKpis(K){
   const st=payrollState(K.diff,K.paid,K.payoutsDueCount);
   const items=[
-    ["Jahresziel",eur(K.yearTarget),K.quarters.filter(q=>q.target>0).length+" von 4 Quartalen hinterlegt",null],
-    ["Umsatz gewertet",eur(K.revenue),K.yearTarget>0?"Zielerreichung "+pct(K.ach):"noch kein Ziel gesetzt",null],
-    ["Provision gesamt",eur(K.commissionTotal),"Satz "+rateLabel(K.rate)+" plus Lizenzen "+eur(K.licGross),null],
-    ["Davon fällig",eur(K.due),K.openPart>0?eur(K.openPart)+" noch offen":"vollständig fällig",null],
+    ["Jahresziel",eur(K.yearTarget),K.quarters.filter(q=>q.target>0).length+" von 4 Quartalen",null],
+    ["Umsatz gewertet",eur(K.revenue),K.yearTarget>0?pct(K.ach)+" erreicht":"kein Ziel gesetzt",null],
+    ["Provision gesamt",eur(K.commissionTotal),
+      "Satz "+rateLabel(K.rate)+(K.licGross>0?" · Lizenzen "+eur(K.licGross):"")+(K.carryBilled>0?" · Übertrag "+eur(K.carryBilled):""),null],
+    ["Davon fällig",eur(K.due),K.openPart>0?eur(K.openPart)+" offen":"vollständig fällig",null],
     ["Differenz Lohnzettel",(K.diff>0?"+":"")+eur(K.diff),st.label,st.key==="waiting"||st.key==="none"?null:st.color]
   ];
-  document.getElementById("kpis").innerHTML=items.map(([k,v,s,c])=>
-    '<div class="kpi" style="'+(c?"border-bottom:3px solid "+c:"")+'"><div class="label light">'+k+
-    '</div><div class="v num" style="'+(c?"color:"+c:"")+'">'+v+'</div><div class="s">'+esc(s)+'</div></div>').join("");
+  document.getElementById("kpis").innerHTML=items.map(([k,v,sub,c])=>
+    '<div class="kpi"'+(c?' style="border-color:'+c+'"':'')+'>'+
+    (c?'<span class="bar" style="background:'+c+'"></span>':'')+
+    '<div class="k">'+k+'</div>'+
+    '<div class="v num"'+(c?' style="color:'+c+'"':'')+'>'+v+'</div>'+
+    '<div class="s" title="'+esc(sub)+'">'+esc(sub)+'</div></div>').join("");
 }
 
 function renderTier(K,data){
@@ -670,8 +729,7 @@ function renderChart(K){
 
   document.getElementById("chart").innerHTML=
     '<div class="row between" style="align-items:flex-end;margin-bottom:10px">'+
-    '<div><h2 class="sec">Ziel, Umsatz und Monatsverlauf</h2>'+
-    '<div class="hint" style="margin-top:4px">Balken je Quartal, Linie je Monat. Mit der Maus über das Diagramm fahren.</div></div>'+
+    '<div><h2 class="sec">Ziel, Umsatz und Monatsverlauf</h2></div>'+
     '<div class="row hint" style="gap:14px">'+
     '<span><span style="display:inline-block;width:10px;height:10px;background:var(--line);border-radius:2px"></span> Ziel</span>'+
     '<span><span style="display:inline-block;width:10px;height:10px;background:var(--plum);border-radius:2px"></span> Umsatz</span>'+
@@ -738,90 +796,157 @@ function bindChartHover(){
 const billsOf=d=>Array.isArray(d.bills)?d.bills:[];
 const billedSum=d=>billsOf(d).reduce((a,b)=>a+(Number(b.amount)||0),0);
 
+/* Provisionssatz eines beliebigen Geschäftsjahres. Eine Rechnung wird immer mit
+   dem Satz des Jahres bewertet, in dem der Auftrag gewonnen wurde. */
+function rateOfYear(yd){
+  if(!yd)return 0;
+  if(yd.rateMode==="flat")return Number(yd.flatRate)||0;
+  let rev=0;
+  for(let m=0;m<12;m++)((yd.deals||{})[m]||[]).forEach(d=>{ if((TYPES[d.type]||{}).target)rev+=dealValue(d); });
+  const tgt=(yd.targets||[]).reduce((a,b)=>a+(Number(b)||0),0);
+  if(!(rev>0&&tgt>0))return 0;
+  return tierFor(rev/tgt,yd.tiers&&yd.tiers.length?yd.tiers:DEFAULT_TIERS).rate;
+}
+const shareOfYear=yd=>Number.isFinite(yd&&yd.closingShare)?yd.closingShare:.5;
+
+/* Alle Aufträge aller Geschäftsjahre eines Mitarbeiters, mit ihrem jeweiligen Satz */
+function allDealsAcrossYears(){
+  const years=P().years||{}, out=[];
+  Object.keys(years).forEach(yk=>{
+    const yd=years[yk], r=rateOfYear(yd), sh=shareOfYear(yd);
+    for(let m=0;m<12;m++)((yd.deals||{})[m]||[]).forEach(d=>{
+      if(!(TYPES[d.type]||{}).target)return;
+      out.push({yearKey:yk,month:m,deal:d,rate:r,share:sh,acc:dealAccrual(d,r,sh)});
+    });
+  });
+  return out;
+}
+
 function dealAccrual(d,rate,share){
   const value=dealValue(d), total=value*rate;
   if(d.prepaid)return{value,total,atClosing:total,bills:[],open:0,billed:value,ratio:1};
   const atClosing=total*share;
   const secondHalf=total*(1-share);
   let cum=0; const bills=[];
-  billsOf(d).slice().sort((a,b)=>a.m-b.m).forEach(b=>{
+  billsOf(d).slice().sort((a,b)=>(a.y||0)-(b.y||0)||a.m-b.m).forEach(b=>{
     const amt=Math.max(Number(b.amount)||0,0);
     const counted=value>0?Math.min(amt,Math.max(value-cum,0)):0;
     cum+=counted;
-    if(counted>0)bills.push({m:b.m,amount:amt,counted,com:secondHalf*(counted/value)});
+    if(counted>0)bills.push({id:b.id,m:b.m,y:b.y,amount:amt,counted,com:secondHalf*(counted/value)});
   });
   const ratio=value>0?Math.min(cum/value,1):0;
   return{value,total,atClosing,bills,open:secondHalf*(1-ratio),billed:cum,ratio};
 }
 
+/* Satz einer Position: Lizenzen fest, alles andere nach Jahresstufe */
+function dealRate(d,rate){
+  const yd=D();
+  return d.type==="licence" ? (Number(yd.licenceRate)||0)
+       : TYPES[d.type].target ? rate : 0;
+}
+function dealCommission(d,rate){ return dealValue(d)*dealRate(d,rate); }
+
+/* Chip mit Satz und Provisionsbetrag */
+function comChip(d,rate){
+  const r=dealRate(d,rate), c=dealCommission(d,rate), t=TYPES[d.type];
+  if(!r)return '<span class="chip" style="width:130px;justify-content:center;background:var(--paper);color:var(--slate)">keine Provision</span>';
+  return '<span class="chip" style="width:130px;justify-content:space-between;background:'+t.bg+';color:'+t.color+'"'+
+    ' title="'+esc(t.label+": "+rateLabel(r)+" auf "+eur(dealValue(d)))+'">'+
+    '<span>'+rateLabel(r)+'</span><span class="num">'+eur(c)+'</span></span>';
+}
+
 function billCell(d,m,rate){
   const share=Number.isFinite(D().closingShare)?D().closingShare:.5;
   const a=dealAccrual(d,rate,share);
-  const col=a.ratio>=1?"var(--green)":a.ratio>0?"var(--teal)":"var(--slate)";
-  return '<button class="btn quiet" style="width:200px;justify-content:space-between;font-size:12px;padding:3px 8px;'+
-    'border:1px solid '+(a.ratio>0?col:"var(--line)")+';background:'+(a.ratio>=1?"var(--greenSoft)":"#fff")+';color:'+col+'"'+
-    ' data-act="openBills" data-id="'+d.id+'" data-m="'+m+'" title="Abgerechnete Beträge je Monat erfassen">'+
-    '<span>'+(a.ratio>0?"faktur. "+eur(a.billed):"nicht fakturiert")+'</span>'+
-    '<span class="num" style="font-weight:600">'+Math.round(a.ratio*100)+' %</span></button>';
+  /* Anteil der Provision, der bereits verdient ist: Abschlusshälfte plus Fakturierung */
+  const earned=d.prepaid?1:share+(1-share)*a.ratio;
+  const col=earned>=0.999?"var(--green)":"var(--teal)";
+  return '<button class="btn quiet" style="width:186px;justify-content:space-between;font-size:12px;padding:3px 8px;'+
+    'border:1px solid '+col+';background:'+(earned>=0.999?"var(--greenSoft)":"#fff")+';color:'+col+'"'+
+    ' data-act="openBills" data-id="'+d.id+'" data-m="'+m+'"'+
+    ' title="'+esc("Provision verdient "+eur(a.total*earned)+" von "+eur(a.total)+
+      " · fakturierter Umsatz "+eur(a.billed)+" von "+eur(a.value))+'">'+
+    '<span class="num">'+eur(a.total*earned)+'</span>'+
+    '<span class="num" style="font-weight:600">'+Math.round(earned*100)+' %</span></button>';
 }
 
 /* Eingabemaske für die Rechnungen einer Position */
-function billEditorHtml(d,m,rate){
+function billEditorHtml(d,m,rate,yk){
   const share=Number.isFinite(D().closingShare)?D().closingShare:.5;
   const a=dealAccrual(d,rate,share);
-  const rows=billsOf(d).slice().sort((x,y)=>x.m-y.m).map(b=>
+  const baseY=Number(yk!=null?yk:YKEY());
+  const yearOpts=v=>{let o="";for(let y=baseY-1;y<=baseY+4;y++)o+='<option value="'+y+'"'+(y===v?" selected":"")+'>'+y+'</option>';return o;};
+  const rows=billsOf(d).slice().sort((x,y)=>(x.y||baseY)-(y.y||baseY)||x.m-y.m).map(b=>
     '<div class="row" style="gap:6px;padding:3px 0">'+
     '<select style="font-size:12px;padding:3px 6px" data-act="billMonth" data-id="'+d.id+'" data-m="'+m+'" data-b="'+b.id+'">'+
       MONTHS.map((n,i)=>'<option value="'+i+'"'+(i===b.m?" selected":"")+'>'+n+'</option>').join("")+'</select>'+
+    '<select style="font-size:12px;padding:3px 6px" data-act="billYear" data-id="'+d.id+'" data-m="'+m+'" data-b="'+b.id+'">'+
+      yearOpts(Number(b.y!=null?b.y:baseY))+'</select>'+
     '<input class="rt num" style="width:120px;font-size:12px;padding:3px 6px" value="'+numf(b.amount)+'"'+
       ' data-act="billAmount" data-id="'+d.id+'" data-m="'+m+'" data-b="'+b.id+'">'+
-    '<span class="hint num" style="min-width:90px;text-align:right">'+
-      eur((a.bills.find(x=>x.m===b.m&&Math.abs(x.amount-(Number(b.amount)||0))<0.01)||{com:0}).com)+' Provision</span>'+
+    '<span class="hint num" style="min-width:96px;text-align:right">'+
+      eur((a.bills.find(x=>x.id===b.id)||{com:0}).com)+' Provision</span>'+
     '<button class="btn quiet" style="padding:2px 6px" data-act="billDel" data-id="'+d.id+'" data-m="'+m+'" data-b="'+b.id+'">🗑</button>'+
     '</div>').join("");
 
+  const fromBill=a.total*(1-share)*a.ratio;
+  const earned=d.prepaid?a.total:a.atClosing+fromBill;
+  const earnedPct=a.total>0?earned/a.total:0;
+  const restUmsatz=Math.max(a.value-a.billed,0);
+  const rateHere=dealRate(d,rate);
+
   return '<div class="box" style="margin:6px 0 10px;background:#fff">'+
-    '<div class="row between" style="margin-bottom:8px">'+
-    '<div><b>'+esc(d.customer)+'</b> <span class="hint">· Auftragswert '+eur(a.value)+' · Provision '+eur(a.total)+'</span></div>'+
-    '<button class="btn quiet" style="padding:2px 8px" data-act="closeBills">Schließen</button></div>'+
-    '<div class="row" style="gap:20px;margin-bottom:8px">'+
-    '<div><div class="label">Bei Abschluss</div><div class="num" style="font-weight:600;color:var(--plum)">'+eur(a.atClosing)+'</div></div>'+
-    '<div><div class="label">Aus Fakturierung</div><div class="num" style="font-weight:600;color:var(--teal)">'+eur(a.total*(1-share)*a.ratio)+'</div></div>'+
+    '<div class="row between" style="margin-bottom:10px">'+
+    '<div><b>'+esc(d.customer)+'</b> <span class="hint">· Auftragswert '+eur(a.value)+
+      ' · Satz '+rateLabel(rateHere)+' · Provision gesamt '+eur(a.total)+'</span></div>'+
+    '<div class="row">'+
+    '<button class="btn quiet" style="padding:3px 10px;font-size:12px;border:1px solid '+(d.prepaid?"var(--teal)":"var(--line)")+
+      ';background:'+(d.prepaid?"var(--tealSoft)":"#fff")+';color:'+(d.prepaid?"var(--teal)":"var(--muted)")+'"'+
+      ' data-act="togglePre" data-id="'+d.id+'" data-m="'+m+'" title="Gesamte Provision sofort fällig, ohne Aufteilung">'+
+      'Provision sofort vollständig</button>'+
+    '<button class="btn quiet" style="padding:2px 8px" data-act="closeBills">Schließen</button></div></div>'+
+    '<div class="row" style="gap:20px;margin-bottom:10px">'+
+    '<div><div class="label">Bei Abschluss</div><div class="num" style="font-weight:600;color:var(--plum)">'+eur(a.atClosing)+
+      ' <span class="hint">'+pct(share,0)+'</span></div></div>'+
+    '<div><div class="label">Aus Fakturierung</div><div class="num" style="font-weight:600;color:var(--teal)">'+eur(fromBill)+'</div></div>'+
     '<div><div class="label">Noch offen</div><div class="num" style="font-weight:600;color:var(--amber)">'+eur(a.open)+'</div></div>'+
-    '<div style="flex:1;min-width:160px"><div class="label">Fakturiert '+eur(a.billed)+' von '+eur(a.value)+'</div>'+
-    '<div style="height:8px;border-radius:4px;background:var(--line);margin-top:6px;overflow:hidden">'+
-    '<div style="height:100%;width:'+(a.ratio*100)+'%;background:var(--teal)"></div></div></div>'+
+    '<div style="flex:1;min-width:200px">'+
+    '<div class="label">Provision verdient '+eur(earned)+' von '+eur(a.total)+' · '+Math.round(earnedPct*100)+' %</div>'+
+    '<div style="height:10px;border-radius:5px;background:var(--line);margin-top:6px;overflow:hidden;display:flex">'+
+    '<div style="height:100%;width:'+(d.prepaid?100:share*100)+'%;background:var(--plum)" title="Abschlussanteil"></div>'+
+    '<div style="height:100%;width:'+(d.prepaid?0:(1-share)*a.ratio*100)+'%;background:var(--teal)" title="aus Fakturierung"></div></div>'+
+    '<div class="hint" style="margin-top:4px">Fakturierter Umsatz '+eur(a.billed)+' von '+eur(a.value)+
+      (restUmsatz>0?' · offen '+eur(restUmsatz):' · vollständig')+'</div></div>'+
     '</div>'+
     (rows?'<div style="border-top:1px solid var(--line);padding-top:6px">'+rows+'</div>':
       '<div class="hint" style="border-top:1px solid var(--line);padding-top:8px">Noch keine Rechnung erfasst.</div>')+
     '<div class="row" style="gap:6px;margin-top:10px;border-top:1px solid var(--line);padding-top:10px">'+
     '<select id="nbM" style="font-size:12px;padding:5px 8px">'+
       MONTHS.map((n,i)=>'<option value="'+i+'"'+(i===new Date().getMonth()?" selected":"")+'>'+n+'</option>').join("")+'</select>'+
-    '<input id="nbA" class="rt" style="width:130px" placeholder="Betrag netto">'+
-    '<button class="btn solid" data-act="billAdd" data-id="'+d.id+'" data-m="'+m+'">Rechnung erfassen</button>'+
-    (a.open>0?'<button class="btn" data-act="billRest" data-id="'+d.id+'" data-m="'+m+'" title="Restbetrag im gewählten Monat abrechnen">Rest '+eur(a.value-a.billed)+' buchen</button>':'')+
+    '<select id="nbY" style="font-size:12px;padding:5px 8px">'+yearOpts(Number(YKEY()))+'</select>'+
+    '<input id="nbA" class="rt" style="width:130px" placeholder="Betrag netto"'+(d.prepaid?" disabled":"")+'>'+
+    '<button class="btn solid" data-act="billAdd" data-id="'+d.id+'" data-m="'+m+'"'+(d.prepaid?" disabled":"")+'>Rechnung erfassen</button>'+
+    (restUmsatz>0&&!d.prepaid?'<button class="btn" data-act="billRest" data-id="'+d.id+'" data-m="'+m+
+      '" title="Bucht den noch nicht fakturierten Umsatz und macht damit '+esc(eur(a.open))+' Provision fällig">Rest '+
+      eur(restUmsatz)+' fakturieren</button>':'')+
     '</div></div>';
 }
 
 function dealRow(d,m,data,rate){
   const t=TYPES[d.type], auto=t.factor>1;
-  const half=rateLabel(rate/2);
   const opts=(data.usePipeline?["closing","managed","licence","pipeline"]:["closing","managed","licence"])
     .map(k=>'<option value="'+k+'"'+(k===d.type?" selected":"")+'>'+TYPES[k].label+'</option>').join("");
   const months=MONTHS_S.map((mn,i)=>'<option value="'+i+'"'+(i===m?" selected":"")+'>'+mn+'</option>').join("");
   return '<div class="deal">'+
-    '<input class="bare" style="flex:1;min-width:130px" value="'+esc(d.customer)+'" data-act="dealField" data-f="customer" data-id="'+d.id+'" data-m="'+m+'" placeholder="Kunde">'+
-    '<input class="bare" style="flex:1;min-width:110px;font-size:12px;color:var(--muted)" value="'+esc(d.note||"")+'" data-act="dealField" data-f="note" data-id="'+d.id+'" data-m="'+m+'" placeholder="Notiz">'+
+    '<input class="bare grow" style="min-width:120px" value="'+esc(d.customer)+'" data-act="dealField" data-f="customer" data-id="'+d.id+'" data-m="'+m+'" placeholder="Kunde">'+
+    '<input class="bare grow" style="min-width:90px;font-size:12px;color:var(--muted)" value="'+esc(d.note||"")+'" data-act="dealField" data-f="note" data-id="'+d.id+'" data-m="'+m+'" placeholder="Notiz">'+
     '<select style="background:'+t.bg+';color:'+t.color+';border:none;font-size:12px;font-weight:600;padding:4px 6px" data-act="dealField" data-f="type" data-id="'+d.id+'" data-m="'+m+'">'+opts+'</select>'+
-    (auto?'<span class="tag" style="background:'+t.bg+';color:'+t.color+';margin:0">×4</span>':'')+
-    '<input class="bare rt num" style="width:110px" value="'+numf(d.amount)+'" data-act="dealAmount" data-id="'+d.id+'" data-m="'+m+'">'+
-    '<span class="num" style="width:110px;text-align:right;font-weight:600;color:'+t.color+'">'+eur(dealValue(d))+'</span>'+
-    (t.target
-      ? '<button class="btn quiet" style="font-size:12px;padding:3px 8px;border:1px solid '+(d.prepaid?"var(--teal)":"var(--line)")+';background:'+(d.prepaid?"var(--tealSoft)":"transparent")+';color:'+(d.prepaid?"var(--teal)":"var(--slate)")+'" data-act="togglePre" data-id="'+d.id+'" data-m="'+m+'">Vorkasse</button>'+
-        (d.prepaid?'<span style="width:190px;text-align:right;font-size:12px;font-weight:600;color:var(--teal)">'+rateLabel(rate)+' voll fällig</span>'
-          :billCell(d,m,rate))
-      : '<span style="width:180px"></span>')+
-    '<select style="font-size:12px;padding:3px 4px" data-act="moveDeal" data-id="'+d.id+'" data-m="'+m+'">'+months+'</select>'+
+    (auto?'<span class="chip" style="background:'+t.bg+';color:'+t.color+'">×4</span>':'')+
+    '<input class="bare rt num" style="width:104px" value="'+numf(d.amount)+'" data-act="dealAmount" data-id="'+d.id+'" data-m="'+m+'" title="Betrag netto">'+
+    '<span class="num" style="width:104px;text-align:right;font-weight:600;color:'+t.color+'" title="gewerteter Umsatz">'+eur(dealValue(d))+'</span>'+
+    comChip(d,rate)+
+    (t.target?billCell(d,m,rate):'<span style="width:186px"></span>')+
+    '<select style="font-size:12px;padding:3px 4px" data-act="moveDeal" data-id="'+d.id+'" data-m="'+m+'" title="Monat">'+months+'</select>'+
     '<button class="btn quiet" style="padding:2px 6px" data-act="dupDeal" data-id="'+d.id+'" data-m="'+m+'" title="duplizieren">⧉</button>'+
     '<button class="btn quiet" style="padding:2px 6px" data-act="delDeal" data-id="'+d.id+'" data-m="'+m+'" title="löschen">🗑</button>'+
     '</div>';
@@ -848,18 +973,23 @@ function renderQuarters(K,data){ // K.rate steuert die Anzeige der Halbierung
       let body="";
       if(open){
         body='<div style="padding:0 16px 16px">'+
-          (list.length?'<div class="hint" style="padding:0 4px 4px">Aktueller Satz '+rateLabel(K.rate)+': '+rateLabel(K.rate/2)+' entstehen mit dem Abschluss, '+rateLabel(K.rate/2)+' nach der Abrechnung. Ein Klick schaltet die zweite Hälfte frei.</div>'+
+          (list.length?'<div class="hint" style="padding:0 4px 6px">Closings: aktuell '+rateLabel(K.rate)+' · davon '+rateLabel(K.rate/2)+
+              ' mit dem Abschluss, '+rateLabel(K.rate/2)+' mit der Fakturierung. Managed Services vierfach gewertet, Lizenzen fest '+rateLabel(D().licenceRate)+
+              '. Der Prozentwert im hellen Feld zeigt, wie viel der Provision bereits verdient ist.</div>'+
             '<div style="background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px">'+
-              list.map(d=>dealRow(d,m,data,K.rate)+(billFor===d.id?billEditorHtml(d,m,K.rate):"")).join("")+'</div>':'')+
+              list.map(d=>dealRow(d,m,data,K.rate)+(billFor===d.id?billEditorHtml(d,m,K.rate,YKEY()):"")).join("")+'</div>':'')+
           '<div class="row">'+
           '<input id="nc'+m+'" placeholder="Kunde" style="flex:1;min-width:140px">'+
           '<input id="nn'+m+'" placeholder="Notiz, optional" style="flex:1;min-width:120px">'+
           '<input id="na'+m+'" placeholder="Betrag netto" class="rt" style="width:140px">'+
           '<select id="nt'+m+'">'+(data.usePipeline?["closing","managed","licence","pipeline"]:["closing","managed","licence"]).map(k=>'<option value="'+k+'">'+TYPES[k].label+'</option>').join("")+'</select>'+
-          '<label class="hint"><input type="checkbox" id="np'+m+'"> Vorkasse</label>'+
+
           '<button class="btn solid" data-act="addDeal" data-m="'+m+'">Hinzufügen</button>'+
           '<button class="btn quiet" data-act="openPaste" data-m="'+m+'">Liste einfügen</button>'+
-          '</div>'+ (pasteFor===m?pasteBlock(m):"")+'</div>';
+          '</div>'+
+          '<div class="hint" style="margin-top:6px">Aktuelle Sätze: Closing und Managed Services '+rateLabel(K.rate)+
+          ' bei '+(K.yearTarget>0?pct(K.ach):"noch ohne Ziel")+' Zielerreichung · Lizenzen '+rateLabel(D().licenceRate)+
+          ' · Managed Services und Lizenzen zählen vierfach.</div>'+ (pasteFor===m?pasteBlock(m):"")+'</div>';
       }
       return '<div class="month'+(open?" open":"")+'"><div class="head" data-act="toggleMonth" data-m="'+m+'">'+
         '<span style="color:var(--muted)">'+(open?"▾":"▸")+'</span>'+
@@ -896,22 +1026,106 @@ function pasteBlock(m){
     '<button class="btn quiet" data-act="closePaste">Abbrechen</button></div></div>';
 }
 
-function renderOpenBillings(K,data){
-  const el=document.getElementById("openBillings");
-  const share=Number.isFinite(data.closingShare)?data.closingShare:.5;
-  const rows=[];
-  for(let m=0;m<12;m++){
-    (data.deals[m]||[]).forEach(d=>{
-      if(!TYPES[d.type].target||d.prepaid)return;
-      const a=dealAccrual(d,K.rate,share);
-      rows.push({m,d,a});
+/* ---------- Rückfrage zur Provisionsabrechnung ---------- */
+const CLAIM_TO="Samuel.reinhardt@muchconsulting.de";
+
+/* Alle provisionsrelevanten Posten eines Quartals, inklusive Rechnungen aus Vorjahresprojekten */
+function quarterItems(K,q){
+  const yr=Number(YKEY()), items=[];
+  allDealsAcrossYears().forEach(x=>{
+    const a=x.acc;
+    if(Number(x.yearKey)===yr&&Math.floor(x.month/3)===q.q&&a.atClosing>0){
+      items.push({kunde:x.deal.customer,art:TYPES[x.deal.type].label,
+        grund:"Abschluss "+MONTHS_S[x.month],umsatz:a.value,satz:x.rate,
+        anteil:pct(x.share,0)+" bei Abschluss",betrag:a.atClosing});
+    }
+    a.bills.forEach(b=>{
+      const by=Number(b.y!=null?b.y:x.yearKey);
+      if(by!==yr||Math.floor(b.m/3)!==q.q)return;
+      items.push({kunde:x.deal.customer,art:TYPES[x.deal.type].label,
+        grund:"Rechnung "+MONTHS_S[b.m]+" "+by+(Number(x.yearKey)!==yr?" (Auftrag "+x.yearKey+")":""),
+        umsatz:b.amount,satz:x.rate,anteil:"Fakturierung",betrag:b.com});
+    });
+  });
+  for(let m=q.ms[0];m<=q.ms[2];m++){
+    (data0().deals[m]||[]).forEach(d=>{
+      if(d.type!=="licence")return;
+      const g=dealValue(d)*(Number(data0().licenceRate)||0);
+      if(g>0)items.push({kunde:d.customer,art:"Lizenz",grund:MONTHS_S[m],
+        umsatz:dealValue(d),satz:Number(data0().licenceRate)||0,anteil:"vollständig",betrag:g});
     });
   }
-  const open=rows.filter(r=>r.a.open>0.5).sort((a,b)=>b.a.open-a.a.open);
-  const sum=open.reduce((a,r)=>a+r.a.open,0);
-  const offenerUmsatz=open.reduce((a,r)=>a+Math.max(r.a.value-r.a.billed,0),0);
+  return items;
+}
+const data0=()=>D();
 
-  if(!rows.length){
+function buildClaimMail(K){
+  const faellig=K.quarters.filter(q=>q.payoutDue);
+  const q=faellig.filter(x=>x.payoutDiff<-0.5).pop()||faellig[faellig.length-1]||K.quarters[0];
+  const items=quarterItems(K,q);
+  const name=P().name||"";
+  const pad=(t,n)=>String(t).padEnd(n).slice(0,n);
+  const padL=(t,n)=>String(t).padStart(n);
+
+  const head=pad("Kunde",26)+pad("Art",18)+pad("Grund",26)+padL("Umsatz",13)+padL("Satz",7)+padL("Provision",12);
+  const lines=items.map(i=>pad(i.kunde,26)+pad(i.art,18)+pad(i.grund,26)+padL(eur(i.umsatz),13)+
+    padL(rateLabel(i.satz),7)+padL(eur(i.betrag),12));
+  const summe=items.reduce((a,i)=>a+i.betrag,0);
+
+  const betreff="Rückfrage Provisionsabrechnung Q"+(q.q+1)+" "+q.payoutYear+(name?" – "+name:"");
+  const text=
+"Hi Samuel,\n\n"+
+"für die letzte Auszahlung der Provisionen von Q"+(q.q+1)+" "+YKEY()+" (Auszahlung "+MONTHS[q.payoutMonth]+" "+q.payoutYear+") "+
+"habe ich mit dem Commission Tracker einen anderen Betrag berechnet als auf der Lohnabrechnung ausgewiesen.\n\n"+
+"Berechnet:   "+eur(q.comDue)+"\n"+
+"Ausgezahlt:  "+eur(q.received)+"\n"+
+"Differenz:   "+eur(q.payoutDiff)+"\n\n"+
+"Nachfolgend siehst du die Positionen, die aus meiner Sicht provisionsrelevant sind:\n\n"+
+head+"\n"+"-".repeat(102)+"\n"+
+(lines.length?lines.join("\n"):"(keine Positionen erfasst)")+"\n"+"-".repeat(102)+"\n"+
+pad("Summe",70)+padL(eur(summe),32)+"\n\n"+
+"Kannst du das bitte gegenprüfen und mir Rückmeldung geben?\n\n"+
+"Danke & LG\n"+(name.trim().split(/\s+/)[0]||"—");
+
+  return{betreff,text,q};
+}
+
+function showClaimMail(K){
+  const {betreff,text}=buildClaimMail(K);
+  const box=document.getElementById("claimBox");
+  if(!box)return;
+  box.classList.remove("hidden");
+  box.innerHTML='<div class="row between" style="margin-bottom:8px">'+
+    '<div><b>Entwurf an '+CLAIM_TO+'</b><div class="hint">'+esc(betreff)+'</div></div>'+
+    '<div class="row"><button class="btn solid" data-act="claimCopy">In Zwischenablage kopieren</button>'+
+    '<button class="btn quiet" data-act="claimClose">Schließen</button></div></div>'+
+    '<textarea id="claimText" rows="16" readonly style="width:100%;font-family:ui-monospace,monospace;font-size:12px">'+
+    esc(text)+'</textarea>';
+  const ta=document.getElementById("claimText");
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>flash("Der Entwurf liegt in der Zwischenablage."),()=>{});
+  }
+  if(ta){ta.focus();ta.select();}
+}
+
+function renderOpenBillings(K,data){
+  const el=document.getElementById("openBillings");
+  const yr=Number(YKEY());
+  const all=allDealsAcrossYears().filter(x=>!x.deal.prepaid);
+  const open=all.filter(x=>x.acc.open>0.5).sort((a,b)=>b.acc.open-a.acc.open);
+  const sum=open.reduce((a,x)=>a+x.acc.open,0);
+  const offenerUmsatz=open.reduce((a,x)=>a+Math.max(x.acc.value-x.acc.billed,0),0);
+  const mehrjahr=open.filter(x=>Number(x.yearKey)!==yr).length;
+
+  /* Provision aus Rechnungen, aufgeteilt nach Jahr der Faktura */
+  const perYear={};
+  all.forEach(x=>x.acc.bills.forEach(b=>{
+    const by=Number(b.y!=null?b.y:x.yearKey);
+    perYear[by]=(perYear[by]||0)+b.com;
+  }));
+  const jahre=Object.keys(perYear).sort();
+
+  if(!all.length){
     el.innerHTML='<div style="padding:20px"><h2 class="sec">Fakturierung und offene Provision</h2>'+
       '<div class="hint" style="margin-top:6px">Sobald Closings erfasst sind, erscheint hier, wie weit sie abgerechnet sind.</div></div>';
     return;
@@ -919,22 +1133,32 @@ function renderOpenBillings(K,data){
 
   el.innerHTML='<div style="padding:20px 20px 0"><div class="row between" style="align-items:flex-end">'+
     '<div><h2 class="sec">Fakturierung und offene Provision</h2>'+
-    '<div class="hint" style="margin-top:6px">Die zweite Provisionshälfte wächst mit dem abgerechneten Volumen und '+
-    'fällt in den Monat der jeweiligen Rechnung. Über „Erfassen“ die Rechnungen eines Projekts pflegen.</div></div>'+
+    '<div class="hint" style="margin-top:6px">Die zweite Provisionshälfte wächst mit den gestellten Rechnungen und fällt in das Quartal '+
+    'der jeweiligen Rechnung. Projekte mit Laufzeit über den Jahreswechsel erscheinen hier unabhängig vom gewählten Geschäftsjahr.</div></div>'+
     '<div class="row" style="gap:22px">'+
     '<div><div class="label">Provision offen</div><div class="num" style="font-size:18px;font-weight:600;color:var(--amber)">'+eur(sum)+'</div></div>'+
     '<div><div class="label">Noch zu fakturieren</div><div class="num" style="font-size:18px;font-weight:600">'+eur(offenerUmsatz)+'</div></div>'+
-    '<div><div class="label">Projekte</div><div class="num" style="font-size:18px;font-weight:600">'+open.length+' offen · '+(rows.length-open.length)+' fertig</div></div>'+
-    '</div></div></div>'+
+    '<div><div class="label">Projekte offen</div><div class="num" style="font-size:18px;font-weight:600">'+open.length+
+      (mehrjahr?' <span class="hint">· '+mehrjahr+' aus anderen Jahren</span>':'')+'</div></div>'+
+    '</div></div>'+
+    (jahre.length>1?'<div class="row" style="gap:10px;margin-top:12px">'+
+      '<span class="label">Provision aus Rechnungen je Jahr</span>'+
+      jahre.map(y=>'<span class="pill" style="font-size:12px;background:'+(Number(y)===yr?"var(--plumSoft)":"var(--paper)")+
+        ';color:'+(Number(y)===yr?"var(--plum)":"var(--muted)")+';border:1px solid '+(Number(y)===yr?"var(--plum)":"var(--line)")+'">'+
+        y+': '+eur(perYear[y])+'</span>').join("")+'</div>':'')+
+    '</div>'+
     (open.length?
     '<table style="margin-top:14px"><thead><tr>'+
     ["Projekt","Abschluss","Auftragswert","Fakturiert","Fortschritt","Bei Abschluss","Aus Rechnungen","Provision offen",""]
       .map(h=>'<th>'+h+'</th>').join("")+
-    '</tr></thead><tbody>'+open.map(r=>{
-      const a=r.a, pctv=Math.round(a.ratio*100);
-      return '<tr><td><b>'+esc(r.d.customer)+'</b>'+(r.d.note?'<span class="hint"> · '+esc(r.d.note)+'</span>':'')+
-        '<span class="tag" style="background:'+TYPES[r.d.type].bg+';color:'+TYPES[r.d.type].color+'">'+TYPES[r.d.type].label+'</span></td>'+
-        '<td style="text-align:left;color:var(--muted)">'+MONTHS[r.m]+'</td>'+
+    '</tr></thead><tbody>'+open.map(x=>{
+      const a=x.acc, pctv=Math.round(a.ratio*100), fremd=Number(x.yearKey)!==yr;
+      const letzte=a.bills.length?a.bills[a.bills.length-1]:null;
+      return '<tr><td><b>'+esc(x.deal.customer)+'</b>'+(x.deal.note?'<span class="hint"> · '+esc(x.deal.note)+'</span>':'')+
+        '<span class="tag" style="background:'+TYPES[x.deal.type].bg+';color:'+TYPES[x.deal.type].color+'">'+TYPES[x.deal.type].label+'</span>'+
+        (fremd?'<span class="tag" style="background:var(--amberSoft);color:var(--amber);border:1px solid var(--amber)">aus '+x.yearKey+'</span>':'')+'</td>'+
+        '<td style="text-align:left;color:var(--muted)">'+MONTHS_S[x.month]+' '+x.yearKey+
+          (letzte?'<div class="hint">zuletzt '+MONTHS_S[letzte.m]+' '+(letzte.y!=null?letzte.y:x.yearKey)+'</div>':'')+'</td>'+
         '<td class="num">'+eur(a.value)+'</td>'+
         '<td class="num" style="color:var(--teal)">'+eur(a.billed)+'</td>'+
         '<td><div class="row" style="gap:8px;justify-content:flex-end">'+
@@ -942,15 +1166,16 @@ function renderOpenBillings(K,data){
           '<div style="height:100%;width:'+pctv+'%;background:var(--teal)"></div></div>'+
           '<span class="num" style="min-width:34px">'+pctv+' %</span></div></td>'+
         '<td class="num" style="color:var(--plum)">'+eur(a.atClosing)+'</td>'+
-        '<td class="num" style="color:var(--teal)">'+(a.ratio>0?eur(a.total*(1-share)*a.ratio):"–")+'</td>'+
+        '<td class="num" style="color:var(--teal)">'+(a.ratio>0?eur(a.total*(1-x.share)*a.ratio):"–")+'</td>'+
         '<td class="num" style="font-weight:600;color:var(--amber)">'+eur(a.open)+'</td>'+
-        '<td><button class="btn" style="padding:3px 10px;font-size:12px" data-act="openBillsJump" data-id="'+r.d.id+'" data-m="'+r.m+'">Erfassen</button></td></tr>'+
-        (billFor===r.d.id?'<tr><td colspan="9" style="background:var(--paper)">'+billEditorHtml(r.d,r.m,K.rate)+'</td></tr>':'');
+        '<td><button class="btn" style="padding:3px 10px;font-size:12px" data-act="openBillsJump" data-id="'+x.deal.id+
+          '" data-m="'+x.month+'" data-yk="'+x.yearKey+'">Rechnungen</button></td></tr>'+
+        (billFor===x.deal.id?'<tr><td colspan="9" style="background:var(--paper)">'+billEditorHtml(x.deal,x.month,x.rate,x.yearKey)+'</td></tr>':'');
     }).join("")+
-    '<tr class="qtot"><td colspan="7">Summe</td><td class="num" style="color:var(--amber)">'+eur(sum)+'</td><td></td></tr>'+
+    '<tr class="qtot"><td colspan="7">Summe offen</td><td class="num" style="color:var(--amber)">'+eur(sum)+'</td><td></td></tr>'+
     '</tbody></table>'
     :'<div style="padding:14px 20px 20px"><div class="pill" style="background:var(--greenSoft);color:var(--green);border:1px solid var(--green)">'+
-     'Alle '+rows.length+' Projekte sind vollständig fakturiert</div></div>');
+     'Alle '+all.length+' Projekte sind vollständig fakturiert</div></div>');
 }
 
 function renderPayouts(K){
@@ -959,14 +1184,16 @@ function renderPayouts(K){
     '<div class="hint" style="margin-top:6px">Zugeordnet nach dem Quartal des Abschlusses. '+
     (K.flat?'Gerechnet wird durchgehend mit dem festen Satz von '+rateLabel(K.rate)+'.'
       :'Der Satz von '+rateLabel(K.rate)+' ergibt sich aus der Jahreserreichung und verändert rückwirkend alle Quartale, sobald eine höhere Stufe erreicht wird.')+
-    ' In den Lohnzettel-Abgleich fließen nur erreichte Auszahlungstermine ein.</div></div>'+
+    ' In den Lohnzettel-Abgleich fließen nur erreichte Auszahlungstermine ein.'+
+    (K.carryBilled>0?' Davon stammen <b>'+eur(K.carryBilled)+'</b> aus Rechnungen zu Projekten früherer Geschäftsjahre.':'')+
+    '</div></div>'+
     '<table style="margin-top:14px"><thead><tr>'+
     ["Quartal","Umsatz","Provision gesamt","Bei Abschluss","Aus Abrechnung","Lizenzen","Fällig","Noch offen"].map(h=>'<th>'+h+'</th>').join("")+
     '</tr></thead><tbody>'+K.quarters.map(q=>{
       const st=q.closed?["abgeschlossen","var(--greenSoft)","var(--green)"]
         :q.current?["läuft","var(--amberSoft)","var(--amber)"]:["offen","var(--paper)","var(--slate)"];
       return '<tr><td><b>Q'+(q.q+1)+'</b><span class="tag" style="background:'+st[1]+';color:'+st[2]+';border:1px solid '+st[2]+'">'+st[0]+'</span>'+
-        (q.comPrepaid>0?'<span class="tag" style="background:var(--tealSoft);color:var(--teal)">Vorkasse</span>':'')+'</td>'+
+'</td>'+
         '<td class="num">'+eur(q.revenue)+'</td><td class="num">'+eur(q.comTotal)+'</td>'+
         '<td class="num" style="color:var(--plum)">'+eur(q.comClosing)+'</td>'+
         '<td class="num" style="color:var(--teal)">'+eur(q.comBilled)+'</td>'+
@@ -986,11 +1213,13 @@ function renderSettle(K){
      ["Zielerreichung",K.yearTarget>0?pct(K.ach):"–",""],["Provisionssatz",K.rate?rateLabel(K.rate):"–","color:var(--plum)"],
      ["Provision auf Umsatz",eur(K.gross),""],["Lizenzumsatz gewertet",eur(K.licence),""],
      ["Lizenzprovision",eur(K.licGross),"color:var(--green)"]]
+      .concat(K.carryBilled>0?[["Rechnungen zu Projekten aus Vorjahren",eur(K.carryBilled),"color:var(--teal)"]]:[])
+      .concat(K.carryOpen>0?[["Davon noch offen in Vorjahresprojekten",eur(K.carryOpen),"color:var(--amber)"]]:[])
       .map(r=>'<tr><td style="color:var(--muted)">'+r[0]+'</td><td class="num" style="font-weight:600;'+r[2]+'">'+r[1]+'</td></tr>').join("")+
     '<tr><td style="border-top:2px solid var(--plum);font-weight:600">Provision gesamt</td>'+
     '<td class="num" style="border-top:2px solid var(--plum);font-size:19px;font-weight:600;color:var(--plum)">'+eur(K.commissionTotal)+'</td></tr></table>'+
     '<h2 class="sec" style="margin-top:22px">Aufteilung der Umsatzprovision</h2>'+
-    '<div class="hint" style="margin:6px 0">'+pct(K.shareRate,0)+' entstehen mit dem Abschluss, der Rest folgt dem Abrechnungsfortschritt. Vorkasse-Positionen sind sofort voll fällig.</div>'+
+    '<div class="hint" style="margin:6px 0">'+pct(K.shareRate,0)+' entstehen mit dem Abschluss, der Rest folgt der Fakturierung. Als sofort fällig markierte Positionen zählen vollständig.</div>'+
     (()=>{const tot=K.closingPart+K.billedPart+K.openPart||1;
       return '<div class="split">'+
       [[K.closingPart,"var(--plum)"],[K.billedPart,"var(--teal)"],[K.openPart,"var(--line)"]]
@@ -1024,8 +1253,12 @@ function renderSettle(K){
     '<td class="num" style="color:var(--plum)"><b>'+(K.diff>0?"+":"")+eur(K.diff)+'</b></td></tr></tbody></table>'+
     '<div style="margin-top:16px;border:1px solid '+st.color+';border-radius:8px;overflow:hidden">'+
     '<div style="background:'+st.color+';color:#fff;padding:8px 14px;font-weight:600">'+st.label+'</div>'+
-    '<div style="background:'+st.bg+';padding:12px 14px">'+esc(st.text)+
+    '<div style="background:'+st.bg+';padding:12px 14px">'+
+    (st.text?esc(st.text):'')+
+    (st.key==="short"?'<button class="btn solid" style="background:var(--coral);border-color:var(--coral)" data-act="claimOpen">'+
+      'Rückfrage an Team Lead erstellen</button>':'')+
     (K.duePending>0?'<div class="hint" style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-top:8px">Für spätere Termine sind bereits <b>'+eur(K.duePending)+'</b> aufgelaufen. Dieser Betrag zählt hier noch nicht mit.</div>':'')+
+    '<div id="claimBox" class="hidden box" style="margin-top:12px;background:#fff"></div>'+
     '</div></div></div>';
 
   document.getElementById("settleWrap").innerHTML=left+right;
@@ -1075,9 +1308,11 @@ function renderPanels(K,data,p,y){
       ["9 · Cloud-Synchronisierung","Die App verbindet sich beim Start automatisch und lädt den Stand aus der Cloud. Vor größeren Änderungen unter „Datei“ einmal neu laden."],
       ["Wichtig zu wissen","Alle Beträge sind brutto ohne Umsatzsteuer und ohne Lohnabzüge. Die Stufe greift auf das gesamte Jahr und wirkt rückwirkend."]
     ];
-    help.innerHTML='<div class="row between" style="margin-bottom:14px"><h2 class="sec">So funktioniert das Tool</h2>'+
-      '<button class="btn quiet" data-act="closePanel">Schließen</button></div><div class="grid g3">'+
-      items.map(i=>'<div class="box"><div style="font-weight:600;color:var(--plum);margin-bottom:4px">'+i[0]+'</div><div class="hint" style="color:var(--muted)">'+i[1]+'</div></div>').join("")+'</div>';
+    help.innerHTML='<div class="phead"><div><h2 class="sec">Anleitung</h2>'+
+      '<div class="sub">In neun Schritten durch den Provisions-Tracker</div></div>'+
+      '<button class="close" data-act="closePanel">Schließen</button></div><div class="grid g3">'+
+      items.map(i=>'<div class="box" style="padding:12px 14px"><div style="font-weight:600;color:var(--plum);font-size:13px;margin-bottom:4px">'+
+        i[0]+'</div><div style="font-size:12px;line-height:1.5;color:var(--muted)">'+i[1]+'</div></div>').join("")+'</div>';
   }
 
   if(panel==="settings"){
@@ -1086,8 +1321,9 @@ function renderPanels(K,data,p,y){
       '<div class="row"><div style="flex:1"><div class="label">ab</div><input class="rt" style="width:100%" value="'+numf(t.min*100)+' %" data-act="tierMin" data-i="'+i+'"></div>'+
       '<div style="flex:1"><div class="label">Satz</div><input class="rt" style="width:100%" value="'+numf(t.rate*100)+' %" data-act="tierRate" data-i="'+i+'"></div></div></div>').join("");
 
-    set.innerHTML='<div class="row between" style="margin-bottom:14px"><h2 class="sec">Rahmendaten · '+esc(p.name||"dieses Profil")+' · '+y+'</h2>'+
-      '<button class="btn quiet" data-act="closePanel">Schließen</button></div>'+
+    set.innerHTML='<div class="phead"><div><h2 class="sec">Stammdaten</h2>'+
+      '<div class="sub">'+esc(p.name||"dieses Profil")+' · Geschäftsjahr '+y+'</div></div>'+
+      '<button class="close" data-act="closePanel">Schließen</button></div>'+
       '<div class="row" style="justify-content:flex-end;margin-bottom:12px">'+
       (confirmAction==="delYear"?'<span style="color:var(--coral)">Jahr '+y+' wirklich löschen?</span><button class="btn solid danger" data-act="delYear">Ja</button><button class="btn quiet" data-act="cancelConfirm">Abbrechen</button>'
         :'<button class="btn quiet" data-act="askDelYear">Jahr löschen</button>')+'</div>'+
@@ -1116,8 +1352,9 @@ function renderPanels(K,data,p,y){
   }
 
   if(panel==="io"){
-    io.innerHTML='<div class="row between" style="margin-bottom:10px"><h2 class="sec">Speicherort, Export und Sicherung</h2>'+
-      '<button class="btn quiet" data-act="closePanel">Schließen</button></div>'+
+    io.innerHTML='<div class="phead"><div><h2 class="sec">Datei</h2>'+
+      '<div class="sub">Cloud-Synchronisierung, Export und Sicherung</div></div>'+
+      '<button class="close" data-act="closePanel">Schließen</button></div>'+
       '<div class="grid g2">'+
       '<div class="box" style="border-color:var(--plum)">'+
       '<div class="row between"><div style="font-weight:600;color:var(--plum)">Cloud-Synchronisierung</div>'+
@@ -1156,7 +1393,7 @@ function renderPanels(K,data,p,y){
 /* ================================================================= */
 function exportRows(){
   const p=P(),data=D(),y=YKEY();
-  const rows=[["Vertriebler","Jahr","Monat","Art","Kunde","Notiz","Betrag","Faktor","Gewertet","Fakturiert","Fortschritt %","Vorkasse"]];
+  const rows=[["Vertriebler","Jahr","Monat","Art","Kunde","Notiz","Betrag","Faktor","Gewertet","Fakturiert","Fortschritt %","Sofort fällig"]];
   for(let m=0;m<12;m++)(data.deals[m]||[]).forEach(d=>rows.push([p.name,y,MONTHS[m],TYPES[d.type].label,d.customer,d.note||"",
     Number(d.amount)||0,typeFactor(d),dealValue(d),
     TYPES[d.type].target?billedSum(d):"",
@@ -1240,7 +1477,7 @@ document.addEventListener("click",e=>{
     if(panel)setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"start"}),60);
     return;}
   const a=t.dataset.act, m=Number(t.dataset.m), id=t.dataset.id, q=Number(t.dataset.q);
-  const data=D();
+  const data=D(), K=calc();
   switch(a){
     case "closePanel": panel=""; render(); break;
     case "selProfile": state.activeProfileId=id; save(); break;
@@ -1299,24 +1536,36 @@ document.addEventListener("click",e=>{
         note:(document.getElementById("nn"+m).value||"").trim(),amount,
         type:document.getElementById("nt"+m).value,
         recurring:false,
-        prepaid:document.getElementById("np"+m).checked,billed:0}]);
+        prepaid:false,bills:[]}]);
+      {
+        const ty=document.getElementById("nt"+m).value;
+        const wert=amount*(TYPES[ty].factor||1);
+        const r=ty==="licence"?(Number(D().licenceRate)||0):(TYPES[ty].target?K.rate:0);
+        const sh=Number.isFinite(D().closingShare)?D().closingShare:.5;
+        flash(TYPES[ty].label+" über "+eur(amount)+
+          (TYPES[ty].factor>1?" (×4 = "+eur(wert)+")":"")+
+          " · Satz "+rateLabel(r)+" · Provision "+eur(wert*r)+
+          (TYPES[ty].target&&r>0?", davon "+eur(wert*r*sh)+" sofort und "+eur(wert*r*(1-sh))+" mit der Fakturierung":""));
+      }
       break;}
-    case "openBills": case "openBillsJump": billFor=billFor===id?null:id; render(); break;
+    case "openBills": case "openBillsJump": billFor=billFor===id?null:id; billYk=t.dataset.yk||null; render(); break;
     case "closeBills": billFor=null; render(); break;
     case "billAdd": {
       const mm=Number(document.getElementById("nbM").value);
       const amt=parseAmount(document.getElementById("nbA").value);
       if(!Number.isFinite(amt)||amt===0){flash("Bitte einen Rechnungsbetrag eintragen.");break;}
-      setDeals(m,l=>l.map(x=>x.id===id?{...x,bills:[...billsOf(x),{id:uid(),m:mm,amount:amt}]}:x));
+      const yy=Number((document.getElementById("nbY")||{}).value||YKEY());
+      writeDeal(m,id,x=>({...x,bills:[...billsOf(x),{id:uid(),m:mm,y:yy,amount:amt}]}));
       break;}
     case "billRest": {
       const mm=Number(document.getElementById("nbM").value);
-      const deal=(D().deals[m]||[]).find(x=>x.id===id); if(!deal)break;
+      const deal=findDeal(m,id); if(!deal)break;
       const rest=dealValue(deal)-billedSum(deal);
       if(rest<=0){flash("Es ist bereits alles fakturiert.");break;}
-      setDeals(m,l=>l.map(x=>x.id===id?{...x,bills:[...billsOf(x),{id:uid(),m:mm,amount:rest}]}:x));
+      const yy2=Number((document.getElementById("nbY")||{}).value||YKEY());
+      writeDeal(m,id,x=>({...x,bills:[...billsOf(x),{id:uid(),m:mm,y:yy2,amount:rest}]}));
       break;}
-    case "billDel": setDeals(m,l=>l.map(x=>x.id===id?{...x,bills:billsOf(x).filter(b=>b.id!==t.dataset.b)}:x)); break;
+    case "billDel": writeDeal(m,id,x=>({...x,bills:billsOf(x).filter(b=>b.id!==t.dataset.b)})); break;
     case "openPaste": pasteFor=m; pasteReview=null; render(); break;
     case "closePaste": pasteFor=null; pasteReview=null; render(); break;
     case "backPaste": pasteReview=null; render(); break;
@@ -1341,12 +1590,22 @@ document.addEventListener("click",e=>{
       const g=i=>document.getElementById(i);
       sb.url=(g("sbUrl").value||"").trim()||SB_DEFAULT_URL;
       sb.key=(g("sbKey").value||"").trim()||SB_DEFAULT_KEY;
-      sb.docId=(g("sbDoc").value||"team").trim()||"team";
+      sb.docId=(g("sbDoc").value||"").trim()||SB_DEFAULT_DOC;
       sb.device=(g("sbDev").value||"").trim();
       sbSaveConfig(); sbPull(false); break;}
     case "sbPull": sbPull(false); break;
     case "sbPush": (async()=>{try{await sbPush();savedAt=new Date();saveErr="";renderChip();flash("Stand in die Cloud geschrieben.");}
       catch(e){flash("Hochladen fehlgeschlagen: "+String(e.message||e).slice(0,140));}})(); break;
+    case "claimOpen": showClaimMail(calc()); break;
+    case "claimClose": { const b=document.getElementById("claimBox"); if(b){b.classList.add("hidden");b.innerHTML="";} break; }
+    case "claimCopy": {
+      const ta=document.getElementById("claimText"); if(!ta)break;
+      ta.focus(); ta.select();
+      let ok=false;
+      if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(ta.value); ok=true; }
+      else { try{ ok=document.execCommand("copy"); }catch(e){} }
+      flash(ok?"Der Entwurf liegt in der Zwischenablage.":"Bitte den markierten Text mit Strg+C kopieren.");
+      break;}
     case "expCsv": expCsv(); break;
     case "expExcel": expExcel(); break;
     case "expJson": expJson(); break;
@@ -1387,10 +1646,12 @@ document.addEventListener("change",e=>{
   switch(a){
     case "dealField": setDeals(m,l=>l.map(x=>x.id===id?{...x,[t.dataset.f]:t.value}:x)); break;
     case "dealAmount": setDeals(m,l=>l.map(x=>x.id===id?{...x,amount:parseAmount(t.value)||0}:x)); break;
-    case "billMonth": setDeals(m,l=>l.map(x=>x.id===id?{...x,
-      bills:billsOf(x).map(b=>b.id===t.dataset.b?{...b,m:Number(t.value)}:b)}:x)); break;
-    case "billAmount": setDeals(m,l=>l.map(x=>x.id===id?{...x,
-      bills:billsOf(x).map(b=>b.id===t.dataset.b?{...b,amount:parseAmount(t.value)||0}:b)}:x)); break;
+    case "billMonth": writeDeal(m,id,x=>({...x,
+      bills:billsOf(x).map(b=>b.id===t.dataset.b?{...b,m:Number(t.value)}:b)})); break;
+    case "billAmount": writeDeal(m,id,x=>({...x,
+      bills:billsOf(x).map(b=>b.id===t.dataset.b?{...b,amount:parseAmount(t.value)||0}:b)})); break;
+    case "billYear": writeDeal(m,id,x=>({...x,
+      bills:billsOf(x).map(b=>b.id===t.dataset.b?{...b,y:Number(t.value)}:b)})); break;
     case "moveDeal": {
       const to=Number(t.value); if(to===m)break;
       const deal=(data.deals[m]||[]).find(x=>x.id===id); if(!deal)break;
@@ -1433,7 +1694,8 @@ function normalize(){
     p.years=p.years||{};
     if(!Object.keys(p.years).length)p.years[String(new Date().getFullYear())]=emptyYear();
     if(!p.years[p.activeYear])p.activeYear=Object.keys(p.years).sort()[0];
-    Object.values(p.years).forEach(y=>{
+    Object.keys(p.years).forEach(yk=>{
+      const y=p.years[yk];
       y.tiers=y.tiers&&y.tiers.length?y.tiers:DEFAULT_TIERS.map(t=>({...t}));
       y.payoutsQ=y.payoutsQ||[0,0,0,0];
       y.deals=y.deals||Object.fromEntries(Array.from({length:12},(_,i)=>[i,[]]));
@@ -1443,8 +1705,9 @@ function normalize(){
           /* Früher gepflegter Prozentsatz wird einmalig in eine Rechnung überführt */
           if(!Array.isArray(d.bills)){
             const b=Number(d.billed)||0;
-            d.bills=b>0?[{id:uid(),m:i,amount:dealValue(d)*Math.min(b,1)}]:[];
+            d.bills=b>0?[{id:uid(),m:i,y:Number(yk),amount:dealValue(d)*Math.min(b,1)}]:[];
           }
+          d.bills.forEach(b=>{ if(b.y==null)b.y=Number(yk); if(!b.id)b.id=uid(); });
           delete d.billed;
         });
       }
