@@ -247,6 +247,7 @@
   <section id="panelHelp" class="card pad hidden panel"></section>
   <section id="panelSettings" class="card pad hidden panel"></section>
   <section id="panelIo" class="card pad hidden panel"></section>
+  <section id="search" class="card pad" style="padding:14px 18px"></section>
   <section id="tier" class="card pad mint"></section>
   <section id="chart" class="card pad sun"></section>
   <div id="quarters"></div>
@@ -281,6 +282,7 @@ const numf=(n,d=2)=>new Intl.NumberFormat("de-DE",{maximumFractionDigits:d}).for
 const pct=(n,d=1)=>((Number.isFinite(n)?n:0)*100).toFixed(d).replace(".",",")+" %";
 const rateLabel=r=>pct(r,(r*100)%1===0?0:1);
 const uid=()=>Math.random().toString(36).slice(2,10);
+const vorname=n=>String(n||"").trim().split(/\s+/)[0]||"Ohne Namen";
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 function parseAmount(raw){
@@ -329,7 +331,7 @@ const newProfile=(name,year)=>({id:uid(),name,activeYear:String(year),years:{[St
 /*  Zustand                                                          */
 /* ================================================================= */
 let state=null, openMonth=new Date().getMonth(), panel="", savedAt=null, saveErr="";
-let billFor=null, billYk=null, pasteFor=null, pasteReview=null, confirmAction="", newNameOpen=false, newYearOpen=false;
+let suche="", billFor=null, billYk=null, pasteFor=null, pasteReview=null, confirmAction="", newNameOpen=false, newYearOpen=false;
 
 const P=()=>state.profiles.find(p=>p.id===state.activeProfileId)||state.profiles[0];
 const YKEY=()=>P().activeYear;
@@ -943,6 +945,7 @@ function render(){
   renderChips(p,y);
   renderKpis(K);
   renderPanels(K,data,p,y);
+  renderSearch(K,data);
   renderTier(K,data);
   renderChart(K);
   renderQuarters(K,data);
@@ -1013,7 +1016,7 @@ function renderChips(p,y){
       const del=on?'<button class="btn quiet" style="padding:0 4px" data-act="askDelProfile" data-id="'+pr.id+'">×</button>':'';
       return '<span class="pill" style="background:'+(on?"#fff":"rgba(255,255,255,.14)")+';color:'+(on?"var(--plum)":"#EADFE6")+
         ';border:1px solid '+(on?"#fff":"rgba(255,255,255,.28)")+';padding-left:6px;padding-right:6px">'+
-        arrows+'<button class="btn quiet" style="color:inherit;padding:2px 6px;gap:6px" data-act="selProfile" data-id="'+pr.id+'">'+img+esc(pr.name||"Ohne Namen")+(pr.locked?' 🔒':'')+'</button>'+arrowsR+del+'</span>';
+        arrows+'<button class="btn quiet" style="color:inherit;padding:2px 6px;gap:6px" data-act="selProfile" data-id="'+pr.id+'">'+img+esc(vorname(pr.name))+(pr.locked?' 🔒':'')+'</button>'+arrowsR+del+'</span>';
     }).join("")+'<button class="btn quiet" style="color:#EADFE6;border:1px dashed rgba(255,255,255,.35);border-radius:999px;padding:4px 10px" data-act="askProfile">+</button>';
   }
 
@@ -1051,6 +1054,90 @@ function renderKpis(K){
     '<div class="k">'+k+'</div>'+
     '<div class="v num"'+(c?' style="color:'+c+'"':'')+'>'+v+'</div>'+
     '<div class="s" title="'+esc(sub)+'">'+esc(sub)+'</div></div>').join("");
+}
+
+/* ---------- Jahresabschluss ---------- */
+function jahresBefund(){
+  const yr=Number(YKEY()), data=D(), K=calc();
+  const naechstes=String(yr+1);
+  const offen=allDealsAcrossYears().filter(x=>!x.deal.prepaid&&x.acc.open>0.5);
+  const offenBetrag=offen.reduce((a,x)=>a+x.acc.open,0);
+  const offenUmsatz=offen.reduce((a,x)=>a+Math.max(x.acc.value-x.acc.billed,0),0);
+  const ohneAuszahlung=K.quarters.filter(q=>q.payoutDue&&q.received===0&&q.comDue>0.5);
+  const diff=K.quarters.filter(q=>q.payoutDue&&Math.abs(q.payoutDiff)>1);
+  const existiert=!!(P().years||{})[naechstes];
+  return{yr,naechstes,K,data,offen,offenBetrag,offenUmsatz,ohneAuszahlung,diff,existiert};
+}
+
+function renderYearEnd(){
+  const b=jahresBefund();
+  const box=document.getElementById("yearEndBox"); if(!box)return;
+  const punkt=(ok,titel,text)=>
+    '<div class="row" style="align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--line)">'+
+    '<span style="flex:0 0 18px;color:'+(ok?"var(--green)":"var(--amber)")+';font-weight:700">'+(ok?"✓":"!")+'</span>'+
+    '<div><div style="font-weight:600">'+titel+'</div><div class="hint">'+text+'</div></div></div>';
+
+  box.innerHTML=
+    '<div style="font-weight:600;color:var(--plum);margin-bottom:4px">Geschäftsjahr '+b.yr+' abschließen</div>'+
+    punkt(b.K.yearTarget>0,"Jahresziel hinterlegt",
+      b.K.yearTarget>0?eur(b.K.yearTarget)+" · Erreichung "+pct(b.K.ach):"Ohne Ziel wurde mit 0 % gerechnet.")+
+    punkt(b.ohneAuszahlung.length===0,"Auszahlungen erfasst",
+      b.ohneAuszahlung.length?b.ohneAuszahlung.map(q=>"Q"+(q.q+1)).join(", ")+" ohne Eintrag auf dem Lohnzettel"
+        :"Alle fälligen Termine sind erfasst.")+
+    punkt(b.diff.length===0,"Abgleich ohne Differenz",
+      b.diff.length?b.diff.map(q=>"Q"+(q.q+1)+" "+(q.payoutDiff>0?"+":"")+eur(q.payoutDiff)).join(" · ")
+        :"Berechnung und Lohnzettel stimmen überein.")+
+    punkt(b.offen.length===0,"Fakturierung abgeschlossen",
+      b.offen.length?b.offen.length+" Projekte mit "+eur(b.offenBetrag)+" offener Provision, "+
+        eur(b.offenUmsatz)+" noch zu fakturieren. Diese laufen automatisch in "+b.naechstes+" weiter."
+        :"Alle Projekte sind vollständig fakturiert.")+
+    '<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:12px">'+
+    (b.existiert
+      ? '<div class="hint" style="margin-bottom:8px">Geschäftsjahr '+b.naechstes+' ist bereits angelegt.</div>'+
+        '<button class="btn" data-act="gotoYear" data-y="'+b.naechstes+'">Zu '+b.naechstes+' wechseln</button>'
+      : '<div class="row" style="gap:10px;align-items:center">'+
+        '<button class="btn solid" data-act="startYear" data-y="'+b.naechstes+'">Geschäftsjahr '+b.naechstes+' anlegen</button>'+
+        '<label class="hint"><input type="checkbox" id="yeCarry" checked> Ziele und Sätze übernehmen</label></div>'+
+        '<div class="hint" style="margin-top:8px">Offene Fakturierungen bleiben beim Ursprungsjahr und erscheinen in '+
+        b.naechstes+' automatisch in der Liste. Es geht nichts verloren.</div>')+
+    '</div>';
+}
+
+function renderSearch(K,data){
+  const el=document.getElementById("search");
+  const q=suche.trim().toLowerCase();
+  const share=Number.isFinite(data.closingShare)?data.closingShare:.5;
+  let treffer=[];
+  if(q.length>=2){
+    for(let m=0;m<12;m++)(data.deals[m]||[]).forEach(d=>{
+      const text=(d.customer+" "+(d.note||"")).toLowerCase();
+      if(text.includes(q))treffer.push({m,d});
+    });
+  }
+  const summe=treffer.reduce((a,x)=>a+dealValue(x.d),0);
+
+  el.innerHTML=
+    '<div class="row" style="gap:10px">'+
+    '<input id="searchInput" value="'+esc(suche)+'" placeholder="Kunde oder Notiz suchen"'+
+      ' style="flex:1;min-width:180px" data-act="search">'+
+    (suche?'<button class="btn quiet" data-act="searchClear">Leeren</button>':'')+
+    (q.length>=2?'<span class="hint">'+treffer.length+(treffer.length===1?" Treffer":" Treffer")+
+      (treffer.length?" · "+eur(summe)+" gewertet":"")+'</span>':'')+
+    '</div>'+
+    (q.length>=2&&treffer.length?
+      '<div style="margin-top:10px;max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:8px">'+
+      '<table>'+treffer.map(x=>{
+        const t=TYPES[x.d.type], a=t.target?dealAccrual(x.d,K.rate,share):null;
+        return '<tr><td style="text-align:left"><b>'+esc(x.d.customer)+'</b>'+
+          (x.d.note?'<span class="hint"> · '+esc(x.d.note)+'</span>':'')+
+          '<span class="tag" style="background:'+t.bg+';color:'+t.color+'">'+t.label+'</span></td>'+
+          '<td style="text-align:left;color:var(--muted)">'+MONTHS[x.m]+'</td>'+
+          '<td class="num">'+eur(dealValue(x.d))+'</td>'+
+          '<td class="num" style="color:'+t.color+'">'+eur(dealCommission(x.d,K.rate))+'</td>'+
+          '<td class="num" style="color:var(--amber)">'+(a&&a.open>0.5?"offen "+eur(a.open):"")+'</td>'+
+          '<td><button class="btn" style="padding:3px 10px;font-size:12px" data-act="jumpDeal" data-m="'+x.m+'">Anzeigen</button></td></tr>';
+      }).join("")+'</table></div>'
+      :q.length>=2?'<div class="hint" style="margin-top:8px">Keine Position gefunden.</div>':'');
 }
 
 function renderTier(K,data){
@@ -1132,6 +1219,16 @@ function renderChart(K){
   const pts=K.monthly.map((mo,i)=>mx(i)+","+yOf(mo.target));
   const line='<polyline fill="none" stroke="var(--teal)" stroke-width="2.5" stroke-linejoin="round" points="'+pts.join(" ")+'"/>';
   const dots=K.monthly.map((mo,i)=>'<circle cx="'+mx(i)+'" cy="'+yOf(mo.target)+'" r="4" fill="#fff" stroke="var(--teal)" stroke-width="2.5"/>').join("");
+
+  /* Kumulierter Verlauf gegen den gleichmäßigen Sollverlauf, eigene Achse rechts */
+  const yOfK=v=>PT+ih-(Math.min(v,K.yearTarget||1)/(K.yearTarget||1))*ih;
+  let lauf=0;
+  const kum=K.monthly.map(mo=>(lauf+=mo.target));
+  const heute=(Number(YKEY())===new Date().getFullYear())?new Date().getMonth():11;
+  const istPts=kum.slice(0,heute+1).map((v,i)=>mx(i)+","+yOfK(v)).join(" ");
+  const kurven=K.yearTarget>0&&istPts
+    ? '<polyline fill="none" stroke="var(--plum)" stroke-width="2.5" stroke-linejoin="round" points="'+istPts+'"/>'
+    : "";
   const schmal=(window.innerWidth||1200)<720;
   const mlab=MONTHS_S.map((n,i)=>(schmal&&i%2?"":
     '<text x="'+mx(i)+'" y="'+(PT+ih+15)+'" text-anchor="middle" font-size="'+(schmal?11:9)+'" fill="var(--slate)">'+n+'</text>')).join("");
@@ -1153,6 +1250,23 @@ function renderChart(K){
   const best=K.monthly.reduce((a,mo,i)=>mo.target>a.v?{v:mo.target,i}:a,{v:0,i:-1});
   const active=K.monthly.filter(mo=>mo.target>0).length;
 
+  /* Takt und Erreichbarkeit der nächsten Stufe */
+  const laufend=Number(YKEY())===new Date().getFullYear();
+  const monatIdx=laufend?new Date().getMonth():11;
+  const verstrichen=monatIdx+1;
+  const restMonate=Math.max(12-verstrichen,0);
+  const soll=(K.yearTarget||0)*verstrichen/12;
+  const abw=K.revenue-soll;
+  const proMonat=verstrichen>0?K.revenue/verstrichen:0;
+  const hochgerechnet=proMonat*12;
+  let stufeInfo=null;
+  if(K.step&&K.yearTarget>0){
+    const noetigProMonat=restMonate>0?K.step.need/restMonate:Infinity;
+    stufeInfo={need:K.step.need,rate:K.step.rate,plus:K.step.plus,restMonate,
+      proMonat:noetigProMonat,
+      machbar:restMonate>0&&noetigProMonat<=proMonat*1.35};
+  }
+
   document.getElementById("chart").innerHTML=
     '<div class="row between" style="align-items:flex-end;margin-bottom:10px">'+
     '<div><h2 class="sec">Ziel, Umsatz und Monatsverlauf</h2></div>'+
@@ -1161,21 +1275,38 @@ function renderChart(K){
     '<span><span style="display:inline-block;width:10px;height:10px;background:var(--plum);border-radius:2px"></span> Umsatz</span>'+
     (data.usePipeline?'<span><span style="display:inline-block;width:10px;height:10px;background:var(--amber);border-radius:2px"></span> Pipeline</span>':'')+
     '<span><span style="display:inline-block;width:14px;height:3px;background:var(--teal);vertical-align:middle"></span> Umsatz je Monat</span>'+
+    (K.yearTarget>0?'<span><span style="display:inline-block;width:14px;height:3px;background:var(--plum);vertical-align:middle"></span> kumuliert</span>':'')+
     '</div></div>'+
     '<div id="chartBox" style="position:relative">'+
     '<svg id="chartSvg" viewBox="0 0 '+W+' '+H+'" style="width:100%;height:280px;display:block">'+
-    grid+bars+labels+mlab+guide+line+dots+hits+
+    grid+bars+labels+mlab+guide+kurven+line+dots+hits+
     '</svg>'+
     '<div id="chartTip" class="hidden" style="position:absolute;pointer-events:none;background:var(--ink);color:#fff;'+
     'padding:8px 11px;border-radius:6px;font-size:12px;line-height:1.5;white-space:nowrap;'+
     'box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:5"></div></div>'+
     '<div class="row" style="gap:26px;margin-top:12px;border-top:1px solid var(--line);padding-top:12px">'+
-    [["Stärkster Monat",best.i>=0&&best.v>0?MONTHS[best.i]+" · "+eur(best.v):"–"],
-     ["Monate mit Umsatz",active+" von 12"],
-     ["Durchschnitt je aktivem Monat",eur(active?K.revenue/active:0)],
-     ["Noch bis Jahresziel",K.yearTarget>K.revenue?eur(K.yearTarget-K.revenue):"erreicht"]]
-      .map(x=>'<div><div class="label">'+x[0]+'</div><div class="num" style="font-weight:600;margin-top:2px">'+x[1]+'</div></div>').join("")+
-    '</div>';
+    [["Stärkster Monat",best.i>=0&&best.v>0?MONTHS[best.i]+" · "+eur(best.v):"–",null],
+     ["Takt nach "+verstrichen+" Monaten",
+       K.yearTarget>0?(abw>=0?"+":"")+eur(abw):"kein Ziel",
+       K.yearTarget>0?(abw>=0?"var(--green)":"var(--coral)"):null],
+     ["Hochgerechnet aufs Jahr",K.yearTarget>0?eur(hochgerechnet)+" · "+pct(hochgerechnet/K.yearTarget,0):eur(hochgerechnet),null],
+     ["Noch bis Jahresziel",K.yearTarget>K.revenue?eur(K.yearTarget-K.revenue):"erreicht",
+       K.yearTarget>0&&K.revenue>=K.yearTarget?"var(--green)":null]]
+      .map(x=>'<div><div class="label">'+x[0]+'</div><div class="num" style="font-weight:600;margin-top:2px'+
+        (x[2]?";color:"+x[2]:"")+'">'+x[1]+'</div></div>').join("")+
+    '</div>'+
+    (stufeInfo?'<div style="margin-top:12px;border-radius:8px;padding:12px 14px;background:'+
+      (stufeInfo.machbar?"var(--greenSoft)":"var(--amberSoft)")+';border:1px solid '+
+      (stufeInfo.machbar?"var(--green)":"var(--amber)")+'">'+
+      '<div style="font-weight:600;color:'+(stufeInfo.machbar?"var(--green)":"var(--amber)")+';margin-bottom:3px">'+
+      'Nächste Stufe '+rateLabel(stufeInfo.rate)+': '+
+      (stufeInfo.restMonate===0?"in diesem Jahr nicht mehr erreichbar"
+        :stufeInfo.machbar?"im aktuellen Takt erreichbar":"nur mit deutlich höherem Takt erreichbar")+'</div>'+
+      '<div style="font-size:13px">Es fehlen <b class="num">'+eur(stufeInfo.need)+'</b>'+
+      (stufeInfo.restMonate>0?', das sind <b class="num">'+eur(stufeInfo.proMonat)+'</b> in jedem der '+
+        stufeInfo.restMonate+' verbleibenden Monate, bei bisher <b class="num">'+eur(proMonat)+'</b> je Monat':'')+
+      (stufeInfo.plus>0?'. Der Sprung bringt <b class="num" style="color:var(--plum)">'+eur(stufeInfo.plus)+
+        '</b> zusätzliche Provision, weil der höhere Satz auf den gesamten Jahresumsatz wirkt':'')+'.</div></div>':'');
 
   bindChartHover();
 }
@@ -1802,6 +1933,7 @@ function renderPanels(K,data,p,y){
   }
 
   if(panel==="io"){
+    setTimeout(renderYearEnd,0);
     io.innerHTML='<div class="phead"><div><h2 class="sec">Datei</h2>'+
       '<div class="sub">Cloud-Synchronisierung, Export und Sicherung</div></div>'+
       '<button class="close" data-act="closePanel">Schließen</button></div>'+
@@ -1834,6 +1966,7 @@ function renderPanels(K,data,p,y){
 
       '<div class="row" style="margin-top:10px"><label class="btn">JSON importieren<input type="file" accept=".json,application/json" class="hidden" id="importInput"></label></div>'+
       '</div></div>'+
+      '<div class="box" style="margin-top:16px" id="yearEndBox"></div>'+
       '<div class="box" style="margin-top:16px">'+
       '<div class="row between"><div style="font-weight:600;color:var(--plum)">Verlauf und Wiederherstellung</div>'+
       '<button class="btn" data-act="histLoad">Verlauf laden</button></div>'+
@@ -1996,6 +2129,15 @@ document.addEventListener("click",e=>{
     case "askReset": confirmAction="reset"; render(); break;
     case "resetYear": patchYear(emptyYear()); confirmAction=""; flash("Jahr zurückgesetzt."); break;
     case "toggleMonth": openMonth=openMonth===m?-1:m; pasteFor=null; pasteReview=null; render(); break;
+    case "searchClear": suche=""; render(); break;
+    case "jumpDeal": {
+      openMonth=m; render();
+      const sec=document.getElementById("quarters");
+      if(sec)setTimeout(()=>{
+        const heads=sec.querySelectorAll(".month");
+        if(heads[m])heads[m].scrollIntoView({behavior:"smooth",block:"center"});
+      },60);
+      break;}
     case "togglePre": setDeals(m,l=>l.map(x=>x.id===id?{...x,prepaid:!x.prepaid}:x)); break;
     case "delDeal": setDeals(m,l=>l.filter(x=>x.id!==id)); break;
     case "dupDeal": setDeals(m,l=>{const i=l.findIndex(x=>x.id===id);if(i<0)return l;
@@ -2090,12 +2232,35 @@ document.addEventListener("click",e=>{
       flash(ok?"Der Entwurf liegt in der Zwischenablage.":"Bitte den markierten Text mit Strg+C kopieren.");
       break;}
 
+    case "startYear": {
+      const y=t.dataset.y, pr=P(); pr.years=pr.years||{};
+      if(!pr.years[y]){
+        const fresh=emptyYear();
+        if((document.getElementById("yeCarry")||{}).checked)
+          Object.assign(fresh,{targets:[...D().targets],tiers:D().tiers.map(x=>({...x})),
+            closingShare:D().closingShare,licenceRate:D().licenceRate,usePipeline:D().usePipeline,
+            rateMode:D().rateMode,flatRate:D().flatRate});
+        pr.years[y]=fresh;
+      }
+      pr.activeYear=y; markDirty(rowKey(pr.id)); save();
+      flash("Geschäftsjahr "+y+" angelegt. Offene Fakturierungen laufen automatisch weiter.");
+      break;}
+    case "gotoYear": P().activeYear=t.dataset.y; markDirty(rowKey(P().id)); save(); break;
     case "histLoad": renderHistory(); break;
     case "histRestore": restoreVersion(P().id,Number(t.dataset.i)); break;
     case "profRestore": restoreProfile(id); break;
     case "expCsv": expCsv(); break;
     case "expExcel": expExcel(); break;
     case "expJson": expJson(); break;
+  }
+});
+
+document.addEventListener("input",e=>{
+  if(e.target&&e.target.id==="searchInput"){
+    suche=e.target.value;
+    const K=calc(); renderSearch(K,D());
+    const f=document.getElementById("searchInput");
+    if(f){ f.focus(); f.setSelectionRange(f.value.length,f.value.length); }
   }
 });
 
