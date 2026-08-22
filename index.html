@@ -110,7 +110,66 @@
   .note{border-radius:8px;padding:12px 16px;margin-top:24px;background:var(--plumSoft);color:var(--plumDeep);
     border:1px solid var(--plum)}
   @media(max-width:900px){.kpis,.g4,.g3,.g2{grid-template-columns:1fr 1fr}}
-  @media(max-width:640px){.kpis,.g4,.g3,.g2{grid-template-columns:1fr}.wrap{padding:0 14px}}
+
+  /* ---------- Mobil ---------- */
+  @media(max-width:720px){
+    body{font-size:15px}
+    .wrap{padding:0 12px}
+    .kpis,.g4,.g3,.g2{grid-template-columns:1fr}
+    .kpi{padding:12px 14px}
+    .kpi .v{font-size:22px}
+    .card.pad{padding:14px}
+    .panel .phead{margin:-14px -14px 12px;padding:12px 14px}
+    .segbar{width:100%;justify-content:space-between}
+    .btn.hdr{flex:1;justify-content:center;padding:8px 6px;font-size:12px}
+    header .row.between{gap:12px}
+
+    /* Positionszeile wird zur Karte */
+    .deal{flex-wrap:wrap;overflow-x:visible;gap:6px;padding:10px 10px 12px;
+      border-top:1px solid var(--line);align-items:center}
+    .deal>*{flex-shrink:1}
+    .deal .c-kunde{flex:1 1 100%;min-width:0;font-weight:600;border:1px solid var(--line);
+      background:#fff;padding:7px 9px}
+    .deal .c-notiz{flex:1 1 100%;min-width:0;border:1px solid var(--line);background:#fff;padding:6px 9px}
+    .deal .c-typ{flex:1 1 58%}
+    .deal .c-x4{flex:0 0 auto}
+    .deal .c-betrag{flex:1 1 38%;width:auto;min-width:0;border:1px solid var(--line);background:#fff;padding:7px 9px}
+    .deal .c-gewertet{flex:1 1 45%;width:auto;text-align:left}
+    .deal .c-prov{flex:1 1 45%;width:auto}
+    .deal .c-fakt{flex:1 1 100%;width:auto}
+    .deal .c-monat{flex:0 0 auto;margin-left:auto}
+    .deal .c-tool{flex:0 0 auto;padding:6px 10px}
+
+    /* Kopfbereich */
+    #brand img{height:34px!important;max-width:180px!important}
+    .avatar{width:56px;height:56px}
+    #nameInput{font-size:22px!important;min-width:0!important;width:100%}
+    #subline{font-size:10px}
+
+    /* Tabellen bleiben lesbar, Diagramm flacher */
+    table{font-size:13px}
+    th,td{padding:7px 8px}
+    #chartSvg{height:210px!important}
+
+    .month>.head{padding:12px 10px;gap:8px}
+    .month .name{width:auto;flex:1}
+    .row{gap:6px}
+  }
+
+  @media(max-width:720px){
+    /* Rechnungsmaske und Eingabeformulare */
+    .box .row>input,.box .row>select{min-width:0}
+    #nbA,#nbM,#nbY{flex:1 1 auto}
+    .box .row{flex-wrap:wrap}
+    textarea{font-size:12px}
+    /* Sperrbildschirm */
+    #gate>div{padding:24px 20px}
+  }
+
+  @media(max-width:420px){
+    .deal .c-typ,.deal .c-betrag,.deal .c-gewertet,.deal .c-prov{flex:1 1 100%}
+    .deal .c-gewertet{text-align:right}
+  }
 </style>
 </head>
 <body>
@@ -1073,7 +1132,9 @@ function renderChart(K){
   const pts=K.monthly.map((mo,i)=>mx(i)+","+yOf(mo.target));
   const line='<polyline fill="none" stroke="var(--teal)" stroke-width="2.5" stroke-linejoin="round" points="'+pts.join(" ")+'"/>';
   const dots=K.monthly.map((mo,i)=>'<circle cx="'+mx(i)+'" cy="'+yOf(mo.target)+'" r="4" fill="#fff" stroke="var(--teal)" stroke-width="2.5"/>').join("");
-  const mlab=MONTHS_S.map((n,i)=>'<text x="'+mx(i)+'" y="'+(PT+ih+15)+'" text-anchor="middle" font-size="9" fill="var(--slate)">'+n+'</text>').join("");
+  const schmal=(window.innerWidth||1200)<720;
+  const mlab=MONTHS_S.map((n,i)=>(schmal&&i%2?"":
+    '<text x="'+mx(i)+'" y="'+(PT+ih+15)+'" text-anchor="middle" font-size="'+(schmal?11:9)+'" fill="var(--slate)">'+n+'</text>')).join("");
 
   /* Unsichtbare Trefferflächen über die volle Höhe: die Maus muss keinen Punkt genau treffen */
   const hits=K.monthly.map((mo,i)=>{
@@ -1217,12 +1278,12 @@ function comChip(d,rate){
   if(!r){
     const ohneZiel=TYPES[d.type].target&&D().rateMode!=="flat"&&
       (D().targets||[]).reduce((a,b)=>a+(Number(b)||0),0)<=0;
-    return '<span class="chip" style="width:130px;justify-content:center;background:'+(ohneZiel?"var(--amberSoft)":"var(--paper)")+
+    return '<span class="chip c-prov" style="width:130px;justify-content:center;background:'+(ohneZiel?"var(--amberSoft)":"var(--paper)")+
       ';color:'+(ohneZiel?"var(--amber)":"var(--slate)")+'" title="'+
       esc(ohneZiel?"Kein Jahresziel hinterlegt, deshalb 0 %":"Für diese Art ist kein Satz hinterlegt")+'">'+
       (ohneZiel?"Ziel fehlt":"keine Provision")+'</span>';
   }
-  return '<span class="chip" style="width:130px;justify-content:space-between;background:'+t.bg+';color:'+t.color+'"'+
+  return '<span class="chip c-prov" style="width:130px;justify-content:space-between;background:'+t.bg+';color:'+t.color+'"'+
     ' title="'+esc(t.label+": "+rateLabel(r)+" auf "+eur(dealValue(d)))+'">'+
     '<span>'+rateLabel(r)+'</span><span class="num">'+eur(c)+'</span></span>';
 }
@@ -1233,7 +1294,7 @@ function billCell(d,m,rate){
   /* Anteil der Provision, der bereits verdient ist: Abschlusshälfte plus Fakturierung */
   const earned=d.prepaid?1:share+(1-share)*a.ratio;
   const col=earned>=0.999?"var(--green)":"var(--teal)";
-  return '<button class="btn quiet" style="width:186px;justify-content:space-between;font-size:12px;padding:3px 8px;'+
+  return '<button class="btn quiet c-fakt" style="width:186px;justify-content:space-between;font-size:12px;padding:3px 8px;'+
     'border:1px solid '+col+';background:'+(earned>=0.999?"var(--greenSoft)":"#fff")+';color:'+col+'"'+
     ' data-act="openBills" data-id="'+d.id+'" data-m="'+m+'"'+
     ' title="'+esc("Provision verdient "+eur(a.total*earned)+" von "+eur(a.total)+
@@ -1310,17 +1371,17 @@ function dealRow(d,m,data,rate){
     .map(k=>'<option value="'+k+'"'+(k===d.type?" selected":"")+'>'+TYPES[k].label+'</option>').join("");
   const months=MONTHS_S.map((mn,i)=>'<option value="'+i+'"'+(i===m?" selected":"")+'>'+mn+'</option>').join("");
   return '<div class="deal">'+
-    '<input class="bare grow" style="min-width:120px" value="'+esc(d.customer)+'" data-act="dealField" data-f="customer" data-id="'+d.id+'" data-m="'+m+'" placeholder="Kunde">'+
-    '<input class="bare grow" style="min-width:90px;font-size:12px;color:var(--muted)" value="'+esc(d.note||"")+'" data-act="dealField" data-f="note" data-id="'+d.id+'" data-m="'+m+'" placeholder="Notiz">'+
-    '<select style="background:'+t.bg+';color:'+t.color+';border:none;font-size:12px;font-weight:600;padding:4px 6px" data-act="dealField" data-f="type" data-id="'+d.id+'" data-m="'+m+'">'+opts+'</select>'+
-    (auto?'<span class="chip" style="background:'+t.bg+';color:'+t.color+'">×4</span>':'')+
-    '<input class="bare rt num" style="width:104px" value="'+numf(d.amount)+'" data-act="dealAmount" data-id="'+d.id+'" data-m="'+m+'" title="Betrag netto">'+
-    '<span class="num" style="width:104px;text-align:right;font-weight:600;color:'+t.color+'" title="gewerteter Umsatz">'+eur(dealValue(d))+'</span>'+
+    '<input class="bare grow c-kunde" style="min-width:120px" value="'+esc(d.customer)+'" data-act="dealField" data-f="customer" data-id="'+d.id+'" data-m="'+m+'" placeholder="Kunde">'+
+    '<input class="bare grow c-notiz" style="min-width:90px;font-size:12px;color:var(--muted)" value="'+esc(d.note||"")+'" data-act="dealField" data-f="note" data-id="'+d.id+'" data-m="'+m+'" placeholder="Notiz">'+
+    '<select class="c-typ" style="background:'+t.bg+';color:'+t.color+';border:none;font-size:12px;font-weight:600;padding:4px 6px" data-act="dealField" data-f="type" data-id="'+d.id+'" data-m="'+m+'">'+opts+'</select>'+
+    (auto?'<span class="chip c-x4" style="background:'+t.bg+';color:'+t.color+'">×4</span>':'')+
+    '<input class="bare rt num c-betrag" style="width:104px" value="'+numf(d.amount)+'" data-act="dealAmount" data-id="'+d.id+'" data-m="'+m+'" title="Betrag netto" placeholder="Betrag">'+
+    '<span class="num c-gewertet" style="width:104px;text-align:right;font-weight:600;color:'+t.color+'" title="gewerteter Umsatz">'+eur(dealValue(d))+'</span>'+
     comChip(d,rate)+
-    (t.target?billCell(d,m,rate):'<span style="width:186px"></span>')+
-    '<select style="font-size:12px;padding:3px 4px" data-act="moveDeal" data-id="'+d.id+'" data-m="'+m+'" title="Monat">'+months+'</select>'+
-    '<button class="btn quiet" style="padding:2px 6px" data-act="dupDeal" data-id="'+d.id+'" data-m="'+m+'" title="duplizieren">⧉</button>'+
-    '<button class="btn quiet" style="padding:2px 6px" data-act="delDeal" data-id="'+d.id+'" data-m="'+m+'" title="löschen">🗑</button>'+
+    (t.target?billCell(d,m,rate):'<span class="c-fakt" style="width:186px"></span>')+
+    '<select class="c-monat" style="font-size:12px;padding:3px 4px" data-act="moveDeal" data-id="'+d.id+'" data-m="'+m+'" title="Monat">'+months+'</select>'+
+    '<button class="btn quiet c-tool" style="padding:2px 6px" data-act="dupDeal" data-id="'+d.id+'" data-m="'+m+'" title="duplizieren">⧉</button>'+
+    '<button class="btn quiet c-tool" style="padding:2px 6px" data-act="delDeal" data-id="'+d.id+'" data-m="'+m+'" title="löschen">🗑</button>'+
     '</div>';
 }
 
