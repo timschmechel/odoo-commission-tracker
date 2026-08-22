@@ -635,6 +635,74 @@ async function unlockProfile(id,pass,remember){
   }catch(e){ return false; }
 }
 
+/* ---------- Plausibilitätsprüfungen ---------- */
+const MAX_BETRAG=50000000;   // 50 Mio als Obergrenze gegen Tippfehler
+
+/* Prüft einen Umsatzbetrag. Gibt den übernommenen Wert und eine Meldung zurück. */
+function pruefeBetrag(v,label){
+  if(!Number.isFinite(v))return{wert:0,fehler:label+" ist keine gültige Zahl."};
+  if(v<0)return{wert:0,fehler:label+" darf nicht negativ sein."};
+  if(v>MAX_BETRAG)return{wert:v,warnung:label+" liegt über "+eur(MAX_BETRAG)+". Bitte prüfen, ob ein Tippfehler vorliegt."};
+  return{wert:v};
+}
+
+/* Prüft eine Rechnung gegen Auftragswert und Abschlussdatum */
+function pruefeRechnung(deal,dealMonth,dealYear,betrag,monat,jahr){
+  const b=pruefeBetrag(betrag,"Der Rechnungsbetrag");
+  if(b.fehler)return b;
+  const rest=dealValue(deal)-billedSum(deal);
+  const warnungen=[];
+  if(betrag>rest+0.5)
+    warnungen.push("Die Rechnung übersteigt den offenen Auftragswert um "+eur(betrag-rest)+
+      ". Für die Provision wird höchstens der Auftragswert gewertet.");
+  if(jahr<dealYear||(jahr===dealYear&&monat<dealMonth))
+    warnungen.push("Das Rechnungsdatum liegt vor dem Abschluss im "+MONTHS[dealMonth]+" "+dealYear+".");
+  return{wert:b.wert,warnung:warnungen.join(" ")};
+}
+
+/* ---------- Bilder liegen im Storage, nicht in der Tabelle ---------- */
+const BUCKET="commission-images";
+const publicUrl=path=>sb.url.replace(/\/$/,"")+"/storage/v1/object/public/"+BUCKET+"/"+path;
+
+function dataUrlToBlob(dataUrl){
+  const [head,b64s]=String(dataUrl).split(",");
+  const mime=(head.match(/data:([^;]+)/)||[])[1]||"application/octet-stream";
+  const bin=atob(b64s); const arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+
+async function uploadImage(dataUrl,path){
+  if(!sbReady()||storageMode!=="supabase")return null;
+  try{
+    const blob=dataUrlToBlob(dataUrl);
+    const r=await fetch(sb.url.replace(/\/$/,"")+"/storage/v1/object/"+BUCKET+"/"+path,
+      {method:"POST",headers:{apikey:sb.key,Authorization:"Bearer "+sb.key,
+        "Content-Type":blob.type,"x-upsert":"true"},body:blob});
+    if(!r.ok)return null;
+    return publicUrl(path)+"?v="+Date.now();
+  }catch(e){ return null; }
+}
+
+/* Bereits als Base64 gespeicherte Bilder einmalig in den Storage verschieben */
+async function migrateImages(){
+  if(storageMode!=="supabase")return;
+  let geaendert=false;
+  for(const pr of state.profiles){
+    if(pr.photo&&pr.photo.startsWith("data:")){
+      const url=await uploadImage(pr.photo,"photos/"+pr.id+".jpg");
+      if(url){ pr.photo=url; markDirty(rowKey(pr.id)); geaendert=true; }
+    }
+  }
+  if(state.logoUrl&&state.logoUrl.startsWith("data:")){
+    const ext=(state.logoUrl.match(/data:image\/(\w+)/)||[])[1]||"png";
+    const url=await uploadImage(state.logoUrl,"brand/logo."+ext);
+    if(url){ state.logoUrl=url; markDirty(metaKey()); geaendert=true; }
+  }
+  if(geaendert){ await save(); render();
+    flash("Bilder wurden in den Dateispeicher ausgelagert. Die Datensätze bleiben dadurch schlank."); }
+}
+
 /* ---------- Verlauf: nichts geht verloren ---------- */
 const HIST_MAX=12;
 const histKey=id=>sb.docId+"::"+id+"::hist";
@@ -749,7 +817,19 @@ create policy "anon lesen" on public.commission_docs
 create policy "anon schreiben" on public.commission_docs
   for insert to anon with check (true);
 create policy "anon aendern" on public.commission_docs
-  for update to anon using (true) with check (true);`;
+  for update to anon using (true) with check (true);
+
+-- Dateispeicher für Logo und Profilfotos
+insert into storage.buckets (id, name, public)
+values ('commission-images', 'commission-images', true)
+on conflict (id) do nothing;
+
+create policy "bilder lesen"    on storage.objects
+  for select to anon using (bucket_id = 'commission-images');
+create policy "bilder anlegen"  on storage.objects
+  for insert to anon with check (bucket_id = 'commission-images');
+create policy "bilder ersetzen" on storage.objects
+  for update to anon using (bucket_id = 'commission-images');`;
 
 /* ================================================================= */
 /*  Meldungen                                                        */
@@ -899,7 +979,8 @@ function renderKpis(K){
   const st=payrollState(K.diff,K.paid,K.payoutsDueCount);
   const items=[
     ["Jahresziel",eur(K.yearTarget),K.quarters.filter(q=>q.target>0).length+" von 4 Quartalen",null],
-    ["Umsatz gewertet",eur(K.revenue),K.yearTarget>0?pct(K.ach)+" erreicht":"kein Ziel gesetzt",null],
+    ["Umsatz gewertet",eur(K.revenue),K.yearTarget>0?pct(K.ach)+" erreicht":"Jahresziel fehlt",
+      K.yearTarget<=0&&K.revenue>0?"var(--amber)":null],
     ["Provision gesamt",eur(K.commissionTotal),
       "Satz "+rateLabel(K.rate)+(K.licGross>0?" · Lizenzen "+eur(K.licGross):"")+(K.carryBilled>0?" · Übertrag "+eur(K.carryBilled):""),null],
     ["Davon fällig",eur(K.due),K.openPart>0?eur(K.openPart)+" offen":"vollständig fällig",null],
@@ -931,6 +1012,17 @@ function renderTier(K,data){
       '<div class="row" style="justify-content:space-between;margin-top:4px">'+
       stops.map(v=>'<span class="hint num">'+pct(v,0)+'</span>').join("")+'</div>';
   }
+  if(!K.flat&&K.yearTarget<=0){
+    el.innerHTML='<div class="row between" style="align-items:flex-end;margin-bottom:14px">'+
+      '<div><h2 class="sec">Provisionsstufe '+YKEY()+'</h2></div></div>'+
+      '<div style="background:var(--amberSoft);border:1px solid var(--amber);border-radius:8px;padding:14px 16px">'+
+      '<div style="font-weight:600;color:var(--amber);margin-bottom:4px">Kein Jahresziel hinterlegt</div>'+
+      '<div style="color:var(--ink)">Ohne Ziel lässt sich keine Zielerreichung berechnen, deshalb steht der Satz auf 0 % '+
+      'und es entsteht keine Provision. Bitte die Quartalsziele unter Stammdaten eintragen.</div>'+
+      '<button class="btn solid" style="margin-top:12px" data-act="goTargets">Quartalsziele eintragen</button></div>';
+    return;
+  }
+
   let stepBox="";
   if(K.step){
     stepBox='<div style="background:var(--plumSoft);border-radius:8px;padding:12px 16px;margin-top:14px">'+
@@ -1122,7 +1214,14 @@ function dealCommission(d,rate){ return dealValue(d)*dealRate(d,rate); }
 /* Chip mit Satz und Provisionsbetrag */
 function comChip(d,rate){
   const r=dealRate(d,rate), c=dealCommission(d,rate), t=TYPES[d.type];
-  if(!r)return '<span class="chip" style="width:130px;justify-content:center;background:var(--paper);color:var(--slate)">keine Provision</span>';
+  if(!r){
+    const ohneZiel=TYPES[d.type].target&&D().rateMode!=="flat"&&
+      (D().targets||[]).reduce((a,b)=>a+(Number(b)||0),0)<=0;
+    return '<span class="chip" style="width:130px;justify-content:center;background:'+(ohneZiel?"var(--amberSoft)":"var(--paper)")+
+      ';color:'+(ohneZiel?"var(--amber)":"var(--slate)")+'" title="'+
+      esc(ohneZiel?"Kein Jahresziel hinterlegt, deshalb 0 %":"Für diese Art ist kein Satz hinterlegt")+'">'+
+      (ohneZiel?"Ziel fehlt":"keine Provision")+'</span>';
+  }
   return '<span class="chip" style="width:130px;justify-content:space-between;background:'+t.bg+';color:'+t.color+'"'+
     ' title="'+esc(t.label+": "+rateLabel(r)+" auf "+eur(dealValue(d)))+'">'+
     '<span>'+rateLabel(r)+'</span><span class="num">'+eur(c)+'</span></span>';
@@ -1828,6 +1927,11 @@ document.addEventListener("click",e=>{
       const p=P(), ys=Object.keys(p.years);
       if(ys.length===1){flash("Das letzte Jahr kann nicht gelöscht werden.");confirmAction="";render();break;}
       delete p.years[YKEY()]; p.activeYear=Object.keys(p.years).sort().pop(); confirmAction=""; save(); break;}
+    case "goTargets": {
+      panel="settings"; render();
+      const el=document.getElementById("panelSettings");
+      if(el)setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"start"}),60);
+      break;}
     case "askReset": confirmAction="reset"; render(); break;
     case "resetYear": patchYear(emptyYear()); confirmAction=""; flash("Jahr zurückgesetzt."); break;
     case "toggleMonth": openMonth=openMonth===m?-1:m; pasteFor=null; pasteReview=null; render(); break;
@@ -1838,6 +1942,11 @@ document.addEventListener("click",e=>{
     case "addDeal": {
       const amount=parseAmount(document.getElementById("na"+m).value);
       if(!Number.isFinite(amount)||amount===0){flash("Bitte einen Betrag eintragen.");break;}
+      {
+        const chk=pruefeBetrag(amount,"Der Betrag");
+        if(chk.fehler){flash(chk.fehler);break;}
+        if(chk.warnung)flash(chk.warnung);
+      }
       setDeals(m,l=>[...l,{id:uid(),
         customer:(document.getElementById("nc"+m).value||"").trim()||"Ohne Bezeichnung",
         note:(document.getElementById("nn"+m).value||"").trim(),amount,
@@ -1862,6 +1971,12 @@ document.addEventListener("click",e=>{
       const amt=parseAmount(document.getElementById("nbA").value);
       if(!Number.isFinite(amt)||amt===0){flash("Bitte einen Rechnungsbetrag eintragen.");break;}
       const yy=Number((document.getElementById("nbY")||{}).value||YKEY());
+      const deal0=findDeal(m,id);
+      if(deal0){
+        const chk=pruefeRechnung(deal0,m,Number(dealYearKey()),amt,mm,yy);
+        if(chk.fehler){flash(chk.fehler);break;}
+        if(chk.warnung)flash(chk.warnung);
+      }
       writeDeal(m,id,x=>({...x,bills:[...billsOf(x),{id:uid(),m:mm,y:yy,amount:amt}]}));
       break;}
     case "billRest": {
@@ -1926,13 +2041,24 @@ document.addEventListener("click",e=>{
 document.addEventListener("change",e=>{
   const t=e.target; const a=t.dataset.act;
   if(t.id==="photoInput"&&t.files[0]){
-    readImage(t.files[0],src=>{patchProfile({photo:src});},()=>flash("Dieses Bildformat kann der Browser nicht darstellen."));
+    readImage(t.files[0],async src=>{
+      const url=await uploadImage(src,"photos/"+P().id+".jpg");
+      patchProfile({photo:url||src});
+      if(!url&&storageMode==="supabase")flash("Der Dateispeicher ist nicht erreichbar, das Bild liegt vorerst im Datensatz.");
+    },()=>flash("Dieses Bildformat kann der Browser nicht darstellen."));
     setTimeout(()=>{t.value="";},1500); return;
   }
   if(t.id==="logoInput"&&t.files[0]){
     const f=t.files[0];
     if(f.size>2*1024*1024){flash("Die Datei ist größer als 2 MB.");return;}
-    const r=new FileReader();r.onload=()=>{state.logoUrl=String(r.result);markDirty(metaKey());save();};r.readAsDataURL(f);
+    const r=new FileReader();
+    r.onload=async()=>{
+      const src=String(r.result);
+      const ext=(src.match(/data:image\/(\w+)/)||[])[1]||"png";
+      const url=await uploadImage(src,"brand/logo."+ext);
+      state.logoUrl=url||src; markDirty(metaKey()); save();
+    };
+    r.readAsDataURL(f);
     setTimeout(()=>{t.value="";},1500); return;
   }
   if(t.id==="importInput"&&t.files[0]){
@@ -1956,11 +2082,17 @@ document.addEventListener("change",e=>{
   const data=D();
   switch(a){
     case "dealField": setDeals(m,l=>l.map(x=>x.id===id?{...x,[t.dataset.f]:t.value}:x)); break;
-    case "dealAmount": setDeals(m,l=>l.map(x=>x.id===id?{...x,amount:parseAmount(t.value)||0}:x)); break;
+    case "dealAmount": {
+      const chk=pruefeBetrag(parseAmount(t.value)||0,"Der Betrag");
+      if(chk.fehler)flash(chk.fehler); else if(chk.warnung)flash(chk.warnung);
+      setDeals(m,l=>l.map(x=>x.id===id?{...x,amount:chk.wert}:x)); break;}
     case "billMonth": writeDeal(m,id,x=>({...x,
       bills:billsOf(x).map(b=>b.id===t.dataset.b?{...b,m:Number(t.value)}:b)})); break;
-    case "billAmount": writeDeal(m,id,x=>({...x,
-      bills:billsOf(x).map(b=>b.id===t.dataset.b?{...b,amount:parseAmount(t.value)||0}:b)})); break;
+    case "billAmount": {
+      const chk=pruefeBetrag(parseAmount(t.value)||0,"Der Rechnungsbetrag");
+      if(chk.fehler)flash(chk.fehler);
+      writeDeal(m,id,x=>({...x,
+        bills:billsOf(x).map(b=>b.id===t.dataset.b?{...b,amount:chk.wert}:b)})); break;}
     case "billYear": writeDeal(m,id,x=>({...x,
       bills:billsOf(x).map(b=>b.id===t.dataset.b?{...b,y:Number(t.value)}:b)})); break;
     case "moveDeal": {
@@ -1970,12 +2102,19 @@ document.addEventListener("change",e=>{
       deals[m]=deals[m].filter(x=>x.id!==id); deals[to]=[...(deals[to]||[]),deal];
       patchYear({deals}); break;}
     case "qTarget": case "target": {
-      const tg=[...data.targets]; tg[q]=parseAmount(t.value)||0; patchYear({targets:tg}); break;}
+      const chk=pruefeBetrag(parseAmount(t.value)||0,"Das Quartalsziel");
+      if(chk.fehler)flash(chk.fehler); else if(chk.warnung)flash(chk.warnung);
+      const tg=[...data.targets]; tg[q]=chk.wert; patchYear({targets:tg}); break;}
     case "payout": {
-      const pq=[...(data.payoutsQ||[0,0,0,0])]; pq[q]=parseAmount(t.value)||0; patchYear({payoutsQ:pq}); break;}
-    case "closingShare": patchYear({closingShare:(parseAmount(t.value)||0)/100}); break;
-    case "licenceRate": patchYear({licenceRate:(parseAmount(t.value)||0)/100}); break;
-    case "flatRate": patchYear({flatRate:(parseAmount(t.value)||0)/100}); break;
+      const chk=pruefeBetrag(parseAmount(t.value)||0,"Der erhaltene Betrag");
+      if(chk.fehler)flash(chk.fehler);
+      const pq=[...(data.payoutsQ||[0,0,0,0])]; pq[q]=chk.wert; patchYear({payoutsQ:pq}); break;}
+    case "closingShare": case "licenceRate": case "flatRate": {
+      let v=(parseAmount(t.value)||0)/100;
+      if(v<0){v=0;flash("Ein Prozentsatz kann nicht negativ sein.");}
+      if(v>1){v=1;flash("Ein Prozentsatz über 100 % ist nicht möglich.");}
+      patchYear(a==="closingShare"?{closingShare:v}:a==="licenceRate"?{licenceRate:v}:{flatRate:v});
+      break;}
     case "tierMin": patchYear({tiers:data.tiers.map((x,j)=>j===i?{...x,min:(parseAmount(t.value)||0)/100}:x)}); break;
     case "tierRate": patchYear({tiers:data.tiers.map((x,j)=>j===i?{...x,rate:(parseAmount(t.value)||0)/100}:x)}); break;
     case "partnerName": state.partnerName=t.value; markDirty(metaKey()); save(); break;
@@ -2050,7 +2189,7 @@ function startApp(){
   render();
   storageMode="supabase";
   sbPull(true)
-    .then(()=>{ savedAt=new Date(); renderChip(); setInterval(sbCheckConflict,60000); })
+    .then(()=>{ savedAt=new Date(); renderChip(); migrateImages(); setInterval(sbCheckConflict,60000); })
     .catch(()=>{ saveErr="Cloud nicht erreichbar"; renderChip(); });
 }
 
