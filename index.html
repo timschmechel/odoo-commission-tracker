@@ -196,9 +196,9 @@
   <div class="grid g2" style="margin-top:24px" id="settleWrap"></div>
   <section id="monthsTable" class="card" style="overflow-x:auto"></section>
   <p class="hint" style="margin-top:24px">
-    Alle Umsätze und Provisionen brutto ohne Abzüge. Die Provisionsstufe wird auf die Jahreszielerreichung
-    angewendet und wirkt auf den gesamten Jahresumsatz. Managed Services und Lizenzen zählen automatisch
-    vierfach, einmalige Closings einfach, wiederkehrende Closings über den ×4-Schalter.
+    Alle Beträge brutto. Die Provisionsstufe richtet sich nach der Jahreszielerreichung und wirkt auf den
+    gesamten Jahresumsatz. Managed Services zählen vierfach, Closings einfach. Lizenzen zählen nicht auf
+    das Umsatzziel und werden mit einem festen Satz vergütet.
   </p>
 </main>
 
@@ -211,7 +211,7 @@ const MONTHS_S=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","No
 const TYPES={
   closing:{label:"Closing",factor:1,target:true,color:"var(--plum)",bg:"var(--plumSoft)"},
   managed:{label:"Managed Services",factor:4,target:true,color:"var(--teal)",bg:"var(--tealSoft)"},
-  licence:{label:"Lizenz",factor:4,target:false,color:"var(--green)",bg:"var(--greenSoft)"},
+  licence:{label:"Lizenz",factor:1,target:false,color:"var(--green)",bg:"var(--greenSoft)"},
   pipeline:{label:"Pipeline",factor:1,target:false,color:"var(--amber)",bg:"var(--amberSoft)"}
 };
 const DEFAULT_TIERS=[{min:0,rate:0},{min:.25,rate:.01},{min:1,rate:.02},{min:1.2,rate:.03}];
@@ -276,8 +276,10 @@ const P=()=>state.profiles.find(p=>p.id===state.activeProfileId)||state.profiles
 const YKEY=()=>P().activeYear;
 const D=()=>({...emptyYear(),...((P().years||{})[YKEY()]||{})});
 
-function patchProfile(patch){const p=P();Object.assign(p,patch);save();}
-function patchYear(patch){const p=P();p.years=p.years||{};p.years[YKEY()]={...D(),...patch};save();}
+function patchProfile(patch){const p=P();Object.assign(p,patch);markDirty(rowKey(p.id));
+  if("name" in patch)markDirty(metaKey());save();}
+function patchYear(patch){const p=P();p.years=p.years||{};p.years[YKEY()]={...D(),...patch};
+  markDirty(rowKey(p.id));save();}
 function setDeals(m,fn){const d=D();const deals={...d.deals};deals[m]=fn(deals[m]||[]);patchYear({deals});}
 
 /* Rechnungen können zu Projekten aus anderen Jahren gehören: diese Helfer treffen das richtige Jahr */
@@ -295,7 +297,7 @@ function setDealsIn(yk,m,fn){
   const p=P(); p.years=p.years||{};
   const yd={...emptyYear(),...(p.years[yk]||{})};
   const deals={...yd.deals}; deals[m]=fn(deals[m]||[]);
-  p.years[yk]={...yd,deals}; save();
+  p.years[yk]={...yd,deals}; markDirty(rowKey(p.id)); save();
 }
 
 /* ================================================================= */
@@ -409,7 +411,7 @@ function save(){
   saveTimer=setTimeout(async()=>{
     try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(e){}
     if(storageMode==="supabase"){
-      try{ await sbPush(); savedAt=new Date(); saveErr=""; }
+      try{ const ok=await sbPush(false); if(ok){ savedAt=new Date(); saveErr=""; } }
       catch(e){ saveErr="Cloud nicht erreichbar: "+String(e.message||e).slice(0,80); }
     }else{ savedAt=new Date(); saveErr=""; }
     renderChip();
@@ -456,42 +458,279 @@ function sbHeaders(json){
 async function sbFetch(path,opts){
   return fetch(sb.url.replace(/\/$/,"")+"/rest/v1/"+path,opts);
 }
+/* ------------------------------------------------------------------ */
+/*  Eine Zeile je Mitarbeiter                                          */
+/*  <team>::__meta  → Reihenfolge, Firmenname, Logo                    */
+/*  <team>::<id>    → ein Mitarbeiter, wahlweise verschlüsselt         */
+/* ------------------------------------------------------------------ */
+const metaKey=()=>sb.docId+"::__meta";
+const rowKey=id=>sb.docId+"::"+id;
+let remoteStamp={};        // Zeitstempel je Zeile, Grundlage der Konfliktprüfung
+let dirty=new Set();       // geänderte Zeilen seit dem letzten Schreiben
+const markDirty=k=>dirty.add(k);
+
+/* ---- Verschlüsselung eines Mitarbeiters ---- */
+const encU=new TextEncoder(), decU=new TextDecoder();
+const b64=buf=>{const b=new Uint8Array(buf);let o="";for(let i=0;i<b.length;i+=0x8000)o+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(o);};
+const unb64=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
+async function keyFrom(pass,salt){
+  const base=await crypto.subtle.importKey("raw",encU.encode(pass),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:unb64(salt),iterations:150000,hash:"SHA-256"},
+    base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function sealYears(key,years){
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,encU.encode(JSON.stringify(years||{})));
+  return{iv:b64(iv),ct:b64(ct)};
+}
+async function openYears(key,box){
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(box.iv)},key,unb64(box.ct));
+  return JSON.parse(decU.decode(pt));
+}
+let profKeys={};   // entschlüsselte Schlüssel dieser Sitzung
+const PASS_KEY="provisions-tracker-codes";
+function rememberedPass(id){ try{return (JSON.parse(localStorage.getItem(PASS_KEY)||"{}"))[id]||null;}catch(e){return null;} }
+function rememberPass(id,pass){ try{const m=JSON.parse(localStorage.getItem(PASS_KEY)||"{}");
+  if(pass)m[id]=pass; else delete m[id]; localStorage.setItem(PASS_KEY,JSON.stringify(m));}catch(e){} }
+const isSealed=p=>!!p.locked&&!profKeys[p.id];
+
+/* ---- Laden ---- */
 async function sbPull(silent){
   if(!sbReady()){flash("Keine Verbindungsdaten hinterlegt.");return;}
   try{
-    const r=await sbFetch("commission_docs?id=eq."+encodeURIComponent(sb.docId)+"&select=data,updated_at,updated_by",
-      {headers:sbHeaders(false)});
+    const r=await sbFetch("commission_docs?id=like."+encodeURIComponent(sb.docId+"::*")+
+      "&select=id,data,updated_at,updated_by",{headers:sbHeaders(false)});
     if(!r.ok)throw new Error(await r.text());
     const rows=await r.json();
-    if(!rows.length){ if(!silent)flash("Für diese Team-Kennung liegen noch keine Daten. Der aktuelle Stand wird beim nächsten Speichern angelegt."); return; }
-    const row=rows[0];
-    if(!row.data||!row.data.profiles)throw new Error("Ungültiger Datensatz");
-    state=row.data; sb.remoteUpdated=row.updated_at; normalize(); render();
-    if(!silent)flash("Stand aus der Cloud geladen"+(row.updated_by?" (zuletzt bearbeitet von "+row.updated_by+")":"")+".");
+    if(!rows.length){
+      /* Übernahme aus der früheren Fassung mit einem einzigen Datensatz je Team */
+      const alt=await sbFetch("commission_docs?id=eq."+encodeURIComponent(sb.docId)+"&select=data",{headers:sbHeaders(false)});
+      if(alt.ok){
+        const a=await alt.json();
+        if(a.length&&a[0].data&&a[0].data.profiles){
+          state=a[0].data; normalize();
+          state.profiles.forEach(pr=>markDirty(rowKey(pr.id)));
+          markDirty(metaKey());
+          await sbPush(true);
+          render();
+          flash("Bestehende Daten wurden auf eine Zeile je Mitarbeiter umgestellt.");
+          return;
+        }
+      }
+      if(!silent)flash("Noch keine Daten unter dieser Team-Kennung. Der aktuelle Stand wird beim nächsten Speichern angelegt.");
+      return;
+    }
+
+    remoteStamp={}; rows.forEach(r0=>remoteStamp[r0.id]=r0.updated_at);
+    const meta=(rows.find(r0=>r0.id===metaKey())||{}).data||{};
+    const profs=[];
+    for(const row of rows){
+      if(row.id===metaKey())continue;
+      const d=row.data||{};
+      if(d.kind!=="profile")continue;
+      const id=row.id.slice((sb.docId+"::").length);
+      if(d.locked){
+        let years=null;
+        const pass=rememberedPass(id);
+        if(pass){ try{ const k=await keyFrom(pass,d.salt); years=await openYears(k,d.box); profKeys[id]=k; }catch(e){} }
+        profs.push({id,name:d.name||"",photo:d.photo||"",activeYear:d.activeYear,
+          locked:true,salt:d.salt,box:d.box,years:years||{}});
+      }else{
+        if(d.deleted)continue;                       // stillgelegte Zeile bleibt liegen
+        profs.push({...(d.profile||{}),id,locked:false});
+      }
+      lastSaved[row.id]=JSON.parse(JSON.stringify(d));
+    }
+    const order=meta.order||[];
+    profs.sort((a,b)=>{const i=order.indexOf(a.id),j=order.indexOf(b.id);
+      return (i<0?999:i)-(j<0?999:j);});
+    const keepActive=state&&profs.some(x=>x.id===state.activeProfileId)?state.activeProfileId:(profs[0]||{}).id;
+    state={version:4,profiles:profs.length?profs:[newProfile("",new Date().getFullYear())],
+      activeProfileId:keepActive,partnerName:meta.partnerName||"",logoUrl:meta.logoUrl||"",
+      logoPlate:meta.logoPlate!==false};
+    dirty.clear(); histCache={}; normalize(); render();
+    if(!silent)flash("Stand aus der Cloud geladen: "+profs.length+" Mitarbeiter.");
   }catch(e){ flash("Laden fehlgeschlagen: "+String(e.message||e).slice(0,140)); }
 }
-async function sbPush(){
-  if(!sbReady())return false;
-  const body=[{id:sb.docId,data:state,updated_at:new Date().toISOString(),updated_by:sb.device}];
+
+/* ---- Zeile schreiben, mit Prüfung auf zwischenzeitliche Änderungen ---- */
+async function writeRow(id,data){
+  const stamp=new Date().toISOString();
+  const known=remoteStamp[id];
+  if(known){
+    const r=await sbFetch("commission_docs?id=eq."+encodeURIComponent(id)+
+      "&updated_at=eq."+encodeURIComponent(known),
+      {method:"PATCH",headers:{...sbHeaders(true),Prefer:"return=representation"},
+       body:JSON.stringify({data,updated_at:stamp,updated_by:sb.device||"unbekannt"})});
+    if(!r.ok)throw new Error((await r.text()).slice(0,160));
+    const rows=await r.json().catch(()=>[]);
+    if(!rows.length)return{conflict:true};
+    remoteStamp[id]=rows[0].updated_at; return{ok:true};
+  }
   const r=await sbFetch("commission_docs?on_conflict=id",
     {method:"POST",headers:{...sbHeaders(true),Prefer:"resolution=merge-duplicates,return=representation"},
-     body:JSON.stringify(body)});
+     body:JSON.stringify([{id,data,updated_at:stamp,updated_by:sb.device||"unbekannt"}])});
   if(!r.ok)throw new Error((await r.text()).slice(0,160));
   const rows=await r.json().catch(()=>[]);
-  if(rows[0])sb.remoteUpdated=rows[0].updated_at;
+  if(rows[0])remoteStamp[id]=rows[0].updated_at;
+  return{ok:true};
+}
+
+async function profileRowData(p){
+  if(p.locked){
+    const key=profKeys[p.id];
+    if(!key)return null;                       // gesperrt und nicht geöffnet: nicht anfassen
+    const box=await sealYears(key,p.years||{});
+    return{kind:"profile",locked:true,name:p.name||"",photo:p.photo||"",
+      activeYear:p.activeYear,salt:p.salt,box};
+  }
+  return{kind:"profile",locked:false,profile:JSON.parse(JSON.stringify(p))};
+}
+
+async function sbPush(all){
+  if(!sbReady())return false;
+  let conflict=null;
+  const keys=all?new Set([metaKey(),...state.profiles.map(p=>rowKey(p.id))]):new Set(dirty);
+  if(!keys.size)return true;
+
+  if(keys.has(metaKey())){
+    const res=await writeRow(metaKey(),{kind:"meta",order:state.profiles.map(p=>p.id),
+      partnerName:state.partnerName||"",logoUrl:state.logoUrl||"",logoPlate:state.logoPlate!==false});
+    if(res.conflict)conflict=metaKey();
+    keys.delete(metaKey());
+  }
+  for(const k of keys){
+    const id=k.slice((sb.docId+"::").length);
+    const p=state.profiles.find(x=>x.id===id);
+    if(!p)continue;
+    const data=await profileRowData(p);
+    if(!data)continue;
+    const vorher=lastSaved[k];
+    const res=await writeRow(k,data);
+    if(res.conflict){ conflict=k; continue; }
+    lastSaved[k]=JSON.parse(JSON.stringify(data));
+    if(vorher)await pushHistory(id,vorher);
+  }
+  dirty.clear();
+  if(conflict){
+    saveErr="Konflikt: ein anderer Stand ist neuer";
+    flash("Diese Zeile wurde zwischenzeitlich von jemand anderem geändert und wurde deshalb nicht überschrieben. Bitte über „Aus Cloud laden“ aktualisieren.");
+    return false;
+  }
   return true;
 }
+
+/* Bereits verschlüsselte Zeilen aus einer früheren Fassung lassen sich öffnen
+   und werden danach wieder unverschlüsselt gespeichert. Neue Verschlüsselung
+   wird nicht mehr angeboten, damit kein Zugang verloren gehen kann. */
+async function unlockProfile(id,pass,remember){
+  const p=state.profiles.find(x=>x.id===id); if(!p)return false;
+  try{
+    const key=await keyFrom(pass,p.salt);
+    const years=await openYears(key,p.box);
+    p.years=years; p.locked=false; delete p.salt; delete p.box;
+    delete profKeys[id]; rememberPass(id,null);
+    markDirty(rowKey(id)); save();
+    normalize(); render(); return true;
+  }catch(e){ return false; }
+}
+
+/* ---------- Verlauf: nichts geht verloren ---------- */
+const HIST_MAX=12;
+const histKey=id=>sb.docId+"::"+id+"::hist";
+let lastSaved={};   // zuletzt bestätigter Stand je Zeile, Grundlage für den Verlauf
+let histCache={};   // geladener Verlauf je Mitarbeiter
+
+async function pushHistory(profileId,prevData){
+  if(!prevData)return;
+  const k=histKey(profileId);
+  let list=histCache[profileId];
+  if(!list){
+    try{
+      const r=await sbFetch("commission_docs?id=eq."+encodeURIComponent(k)+"&select=data,updated_at",{headers:sbHeaders(false)});
+      const rows=r.ok?await r.json():[];
+      list=rows.length&&Array.isArray(rows[0].data&&rows[0].data.versions)?rows[0].data.versions:[];
+      if(rows.length)remoteStamp[k]=rows[0].updated_at;
+    }catch(e){ list=[]; }
+  }
+  list=[{ts:new Date().toISOString(),by:sb.device||"unbekannt",
+    data:JSON.parse(JSON.stringify(prevData))},...list].slice(0,HIST_MAX);
+  histCache[profileId]=list;
+  try{ await writeRow(k,{kind:"hist",versions:list}); }catch(e){}
+}
+
+async function loadHistory(profileId){
+  const k=histKey(profileId);
+  try{
+    const r=await sbFetch("commission_docs?id=eq."+encodeURIComponent(k)+"&select=data,updated_at",{headers:sbHeaders(false)});
+    if(!r.ok)return[];
+    const rows=await r.json();
+    if(!rows.length)return[];
+    remoteStamp[k]=rows[0].updated_at;
+    histCache[profileId]=(rows[0].data&&rows[0].data.versions)||[];
+    return histCache[profileId];
+  }catch(e){ return[]; }
+}
+
+async function restoreVersion(profileId,index){
+  const list=histCache[profileId]||await loadHistory(profileId);
+  const v=list[index]; if(!v){flash("Dieser Stand ist nicht mehr verfügbar.");return;}
+  const p=state.profiles.find(x=>x.id===profileId); if(!p)return;
+  const wieder=v.data&&v.data.profile?v.data.profile:null;
+  if(!wieder){flash("Dieser Stand lässt sich nicht lesen.");return;}
+  Object.assign(p,JSON.parse(JSON.stringify(wieder)),{id:profileId});
+  markDirty(rowKey(profileId)); await save();
+  normalize(); render();
+  flash("Stand vom "+new Date(v.ts).toLocaleString("de-DE")+" wiederhergestellt.");
+}
+
+/* Gelöschte Mitarbeiter bleiben als stillgelegte Zeile erhalten */
+async function loadDeleted(){
+  try{
+    const r=await sbFetch("commission_docs?id=like."+encodeURIComponent(sb.docId+"::*")+
+      "&select=id,data,updated_at,updated_by",{headers:sbHeaders(false)});
+    if(!r.ok)return[];
+    const rows=await r.json();
+    return rows.filter(x=>x.data&&x.data.kind==="profile"&&x.data.deleted)
+      .map(x=>({id:x.id.slice((sb.docId+"::").length),name:(x.data.profile||{}).name||x.data.name||"Ohne Namen",
+        ts:x.updated_at,by:x.updated_by}));
+  }catch(e){ return[]; }
+}
+
+async function restoreProfile(id){
+  try{
+    const k=rowKey(id);
+    const r=await sbFetch("commission_docs?id=eq."+encodeURIComponent(k)+"&select=data,updated_at",{headers:sbHeaders(false)});
+    const rows=r.ok?await r.json():[];
+    if(!rows.length){flash("Die Zeile ist nicht mehr vorhanden.");return;}
+    remoteStamp[k]=rows[0].updated_at;
+    const prof=rows[0].data.profile||{};
+    prof.id=id; prof.locked=false;
+    state.profiles.push(prof); state.activeProfileId=id;
+    markDirty(k); markDirty(metaKey());
+    await save(); normalize(); render();
+    flash("Mitarbeiter wiederhergestellt.");
+  }catch(e){ flash("Wiederherstellen fehlgeschlagen."); }
+}
+
+/* Kein echtes Löschen: die Zeile wird stillgelegt und bleibt wiederherstellbar */
+async function retireRow(id,prof){
+  if(!sbReady()||storageMode!=="supabase")return;
+  try{ await writeRow(id,{kind:"profile",deleted:true,name:prof&&prof.name||"",profile:prof||null}); }catch(e){}
+}
+
 async function sbCheckConflict(){
   if(storageMode!=="supabase")return;
   try{
-    const r=await sbFetch("commission_docs?id=eq."+encodeURIComponent(sb.docId)+"&select=updated_at,updated_by",
-      {headers:sbHeaders(false)});
+    const r=await sbFetch("commission_docs?id=like."+encodeURIComponent(sb.docId+"::*")+
+      "&select=id,updated_at,updated_by",{headers:sbHeaders(false)});
     if(!r.ok)return;
     const rows=await r.json();
-    if(rows.length&&sb.remoteUpdated&&rows[0].updated_at>sb.remoteUpdated)
-      flash("Achtung: "+(rows[0].updated_by||"jemand")+" hat den Stand inzwischen geändert. Bitte über „Neu laden“ aktualisieren, sonst wird überschrieben.");
+    const neuer=rows.filter(x=>remoteStamp[x.id]&&x.updated_at>remoteStamp[x.id]);
+    if(neuer.length)flash((neuer[0].updated_by||"Jemand")+" hat Daten geändert. Über „Aus Cloud laden“ aktualisieren.");
   }catch(e){}
 }
+
 const SB_SQL=`-- Einmalig im Supabase SQL Editor ausführen
 
 create table if not exists public.commission_docs (
@@ -540,7 +779,9 @@ function renderChip(){
 }
 
 function render(){
-  const p=P(), data=D(), K=calc(), y=YKEY();
+  const p=P();
+  if(isSealed(p)){ renderSealed(p); return; }
+  const data=D(), K=calc(), y=YKEY();
 
   document.getElementById("brand").innerHTML = state.logoUrl
     ? '<span style="display:inline-flex;align-items:center;background:'+(state.logoPlate===false?"transparent":"#fff")+
@@ -551,6 +792,7 @@ function render(){
   document.getElementById("ctx").textContent="Geschäftsjahr "+y+" · "+(p.name||"kein Name hinterlegt");
   document.getElementById("subline").textContent="Provisionsübersicht · Geschäftsjahr "+y;
   const ni=document.getElementById("nameInput");
+  ni.readOnly=false;
   if(document.activeElement!==ni)ni.value=p.name||"";
   const av=document.getElementById("avatar");
   const ini=(p.name||"").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
@@ -569,6 +811,37 @@ function render(){
   renderPayouts(K);
   renderSettle(K);
   renderMonths(K,data);
+}
+
+/* Ansicht für einen geschützten, noch nicht geöffneten Mitarbeiter */
+function renderSealed(p){
+  document.getElementById("brand").innerHTML = state.logoUrl
+    ? '<span style="display:inline-flex;align-items:center;background:'+(state.logoPlate===false?"transparent":"#fff")+
+      ';border-radius:8px;padding:'+(state.logoPlate===false?"0":"8px 14px")+'"><img src="'+esc(state.logoUrl)+
+      '" style="height:44px;max-width:260px;object-fit:contain;display:block"></span>'
+    : '<span style="font-size:42px;font-weight:600;line-height:1;letter-spacing:-.03em">odoo</span>';
+  document.getElementById("partner").textContent=state.partnerName||"Partner";
+  document.getElementById("ctx").textContent="Geschützter Bereich";
+  document.getElementById("subline").textContent="Zugriff geschützt";
+  const ni=document.getElementById("nameInput"); ni.value=p.name||""; ni.readOnly=true;
+  renderChip(); renderChips(p,p.activeYear||String(new Date().getFullYear()));
+  document.getElementById("kpis").innerHTML="";
+  ["panelHelp","panelSettings","panelIo"].forEach(id=>document.getElementById(id).classList.add("hidden"));
+  ["chart","quarters","openBillings","payoutTable","settleWrap","monthsTable"].forEach(id=>{
+    const el=document.getElementById(id); if(el)el.innerHTML="";});
+  document.getElementById("tier").innerHTML=
+    '<div style="max-width:420px;margin:20px auto;text-align:center">'+
+    '<div style="font-size:34px">🔒</div>'+
+    '<h2 style="margin:10px 0 4px">'+esc(p.name||"Ohne Namen")+'</h2>'+
+    '<div class="hint" style="margin-bottom:16px">Diese Provisionsdaten sind verschlüsselt. Bitte den persönlichen Code eingeben.</div>'+
+    '<input type="password" id="unlockPass" placeholder="Code" style="width:100%;padding:11px 12px">'+
+    '<div id="unlockErr" class="hidden" style="color:var(--coral);font-size:13px;margin-top:8px"></div>'+
+    '<label class="hint" style="display:block;margin-top:10px;text-align:left">'+
+      '<input type="checkbox" id="unlockRemember" checked> Auf diesem Gerät merken</label>'+
+    '<button class="btn solid" style="width:100%;justify-content:center;margin-top:12px" data-act="doUnlock">Öffnen</button>'+
+    '</div>';
+  const f=document.getElementById("unlockPass");
+  if(f){ f.focus(); f.onkeydown=e=>{ if(e.key==="Enter")document.querySelector('[data-act="doUnlock"]').click(); }; }
 }
 
 function chip(label,active,attrs){
@@ -601,7 +874,7 @@ function renderChips(p,y){
       const del=on?'<button class="btn quiet" style="padding:0 4px" data-act="askDelProfile" data-id="'+pr.id+'">×</button>':'';
       return '<span class="pill" style="background:'+(on?"#fff":"rgba(255,255,255,.14)")+';color:'+(on?"var(--plum)":"#EADFE6")+
         ';border:1px solid '+(on?"#fff":"rgba(255,255,255,.28)")+';padding-left:6px;padding-right:6px">'+
-        arrows+'<button class="btn quiet" style="color:inherit;padding:2px 6px;gap:6px" data-act="selProfile" data-id="'+pr.id+'">'+img+esc(pr.name||"Ohne Namen")+'</button>'+arrowsR+del+'</span>';
+        arrows+'<button class="btn quiet" style="color:inherit;padding:2px 6px;gap:6px" data-act="selProfile" data-id="'+pr.id+'">'+img+esc(pr.name||"Ohne Namen")+(pr.locked?' 🔒':'')+'</button>'+arrowsR+del+'</span>';
     }).join("")+'<button class="btn quiet" style="color:#EADFE6;border:1px dashed rgba(255,255,255,.35);border-radius:999px;padding:4px 10px" data-act="askProfile">+</button>';
   }
 
@@ -666,7 +939,7 @@ function renderTier(K,data){
   }
   el.innerHTML='<div class="row between" style="align-items:flex-end;margin-bottom:14px">'+
     '<div><h2 class="sec">'+(K.flat?"Provisionssatz":"Provisionsstufe")+' '+YKEY()+'</h2>'+
-    '<div class="hint" style="margin-top:4px">'+(K.flat?"Fester Satz, in den Stammdaten hinterlegt.":"Gilt für den gesamten Jahresumsatz, nicht je Quartal.")+'</div></div>'+
+    '</div>'+
     '<div class="row" style="gap:22px">'+
     ['Erreichung|'+(K.yearTarget>0?pct(K.ach):"–"),'Satz|'+(K.rate?rateLabel(K.rate):"–"),
      'Provision Umsatz|'+eur(K.gross),'Davon fällig|'+eur(K.closingPart+K.billedPart)]
@@ -973,9 +1246,7 @@ function renderQuarters(K,data){ // K.rate steuert die Anzeige der Halbierung
       let body="";
       if(open){
         body='<div style="padding:0 16px 16px">'+
-          (list.length?'<div class="hint" style="padding:0 4px 6px">Closings: aktuell '+rateLabel(K.rate)+' · davon '+rateLabel(K.rate/2)+
-              ' mit dem Abschluss, '+rateLabel(K.rate/2)+' mit der Fakturierung. Managed Services vierfach gewertet, Lizenzen fest '+rateLabel(D().licenceRate)+
-              '. Der Prozentwert im hellen Feld zeigt, wie viel der Provision bereits verdient ist.</div>'+
+          (list.length?
             '<div style="background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px">'+
               list.map(d=>dealRow(d,m,data,K.rate)+(billFor===d.id?billEditorHtml(d,m,K.rate,YKEY()):"")).join("")+'</div>':'')+
           '<div class="row">'+
@@ -987,9 +1258,7 @@ function renderQuarters(K,data){ // K.rate steuert die Anzeige der Halbierung
           '<button class="btn solid" data-act="addDeal" data-m="'+m+'">Hinzufügen</button>'+
           '<button class="btn quiet" data-act="openPaste" data-m="'+m+'">Liste einfügen</button>'+
           '</div>'+
-          '<div class="hint" style="margin-top:6px">Aktuelle Sätze: Closing und Managed Services '+rateLabel(K.rate)+
-          ' bei '+(K.yearTarget>0?pct(K.ach):"noch ohne Ziel")+' Zielerreichung · Lizenzen '+rateLabel(D().licenceRate)+
-          ' · Managed Services und Lizenzen zählen vierfach.</div>'+ (pasteFor===m?pasteBlock(m):"")+'</div>';
+ (pasteFor===m?pasteBlock(m):"")+'</div>';
       }
       return '<div class="month'+(open?" open":"")+'"><div class="head" data-act="toggleMonth" data-m="'+m+'">'+
         '<span style="color:var(--muted)">'+(open?"▾":"▸")+'</span>'+
@@ -1024,6 +1293,32 @@ function pasteBlock(m){
     '<select id="pasteType">'+Object.keys(TYPES).map(k=>'<option value="'+k+'">Als '+TYPES[k].label+'</option>').join("")+'</select>'+
     '<button class="btn solid" data-act="checkPaste" data-m="'+m+'">Prüfen</button>'+
     '<button class="btn quiet" data-act="closePaste">Abbrechen</button></div></div>';
+}
+
+async function renderHistory(){
+  const box=document.getElementById("histBox"); if(!box)return;
+  box.innerHTML='<div class="hint">Wird geladen …</div>';
+  const p=P();
+  const [list,entfernt]=await Promise.all([loadHistory(p.id),loadDeleted()]);
+  const zeilen=list.map((v,i)=>{
+    const prof=v.data&&v.data.profile;
+    const jahre=prof&&prof.years?Object.keys(prof.years).length:0;
+    const pos=prof&&prof.years?Object.values(prof.years).reduce((a,y)=>
+      a+Object.values(y.deals||{}).reduce((b,l)=>b+l.length,0),0):0;
+    return '<tr><td style="text-align:left">'+new Date(v.ts).toLocaleString("de-DE")+
+      '<div class="hint">'+esc(v.by||"unbekannt")+'</div></td>'+
+      '<td class="num">'+jahre+' Jahre · '+pos+' Positionen</td>'+
+      '<td><button class="btn" style="padding:3px 10px;font-size:12px" data-act="histRestore" data-i="'+i+'">Wiederherstellen</button></td></tr>';
+  }).join("");
+
+  box.innerHTML=
+    '<div style="font-weight:600;margin-bottom:6px">'+esc(p.name||"Aktueller Mitarbeiter")+'</div>'+
+    (zeilen?'<table>'+zeilen+'</table>':'<div class="hint">Für diesen Mitarbeiter liegen noch keine früheren Stände vor.</div>')+
+    (entfernt.length?'<div style="font-weight:600;margin:14px 0 6px">Entfernte Mitarbeiter</div><table>'+
+      entfernt.map(g=>'<tr><td style="text-align:left">'+esc(g.name)+
+        '<div class="hint">entfernt '+new Date(g.ts).toLocaleString("de-DE")+'</div></td>'+
+        '<td><button class="btn" style="padding:3px 10px;font-size:12px" data-act="profRestore" data-id="'+g.id+'">Wiederherstellen</button></td></tr>').join("")+
+      '</table>':'');
 }
 
 /* ---------- Rückfrage zur Provisionsabrechnung ---------- */
@@ -1133,8 +1428,7 @@ function renderOpenBillings(K,data){
 
   el.innerHTML='<div style="padding:20px 20px 0"><div class="row between" style="align-items:flex-end">'+
     '<div><h2 class="sec">Fakturierung und offene Provision</h2>'+
-    '<div class="hint" style="margin-top:6px">Die zweite Provisionshälfte wächst mit den gestellten Rechnungen und fällt in das Quartal '+
-    'der jeweiligen Rechnung. Projekte mit Laufzeit über den Jahreswechsel erscheinen hier unabhängig vom gewählten Geschäftsjahr.</div></div>'+
+    '</div>'+
     '<div class="row" style="gap:22px">'+
     '<div><div class="label">Provision offen</div><div class="num" style="font-size:18px;font-weight:600;color:var(--amber)">'+eur(sum)+'</div></div>'+
     '<div><div class="label">Noch zu fakturieren</div><div class="num" style="font-size:18px;font-weight:600">'+eur(offenerUmsatz)+'</div></div>'+
@@ -1181,12 +1475,7 @@ function renderOpenBillings(K,data){
 function renderPayouts(K){
   document.getElementById("payoutTable").innerHTML=
     '<div style="padding:20px 20px 0"><h2 class="sec">Auszahlung je Quartal, brutto</h2>'+
-    '<div class="hint" style="margin-top:6px">Zugeordnet nach dem Quartal des Abschlusses. '+
-    (K.flat?'Gerechnet wird durchgehend mit dem festen Satz von '+rateLabel(K.rate)+'.'
-      :'Der Satz von '+rateLabel(K.rate)+' ergibt sich aus der Jahreserreichung und verändert rückwirkend alle Quartale, sobald eine höhere Stufe erreicht wird.')+
-    ' In den Lohnzettel-Abgleich fließen nur erreichte Auszahlungstermine ein.'+
-    (K.carryBilled>0?' Davon stammen <b>'+eur(K.carryBilled)+'</b> aus Rechnungen zu Projekten früherer Geschäftsjahre.':'')+
-    '</div></div>'+
+    (K.carryBilled>0?'<div class="hint" style="margin-top:6px">Davon '+eur(K.carryBilled)+' aus Rechnungen zu Projekten früherer Jahre.</div>':'')+'</div>'+
     '<table style="margin-top:14px"><thead><tr>'+
     ["Quartal","Umsatz","Provision gesamt","Bei Abschluss","Aus Abrechnung","Lizenzen","Fällig","Noch offen"].map(h=>'<th>'+h+'</th>').join("")+
     '</tr></thead><tbody>'+K.quarters.map(q=>{
@@ -1219,7 +1508,7 @@ function renderSettle(K){
     '<tr><td style="border-top:2px solid var(--plum);font-weight:600">Provision gesamt</td>'+
     '<td class="num" style="border-top:2px solid var(--plum);font-size:19px;font-weight:600;color:var(--plum)">'+eur(K.commissionTotal)+'</td></tr></table>'+
     '<h2 class="sec" style="margin-top:22px">Aufteilung der Umsatzprovision</h2>'+
-    '<div class="hint" style="margin:6px 0">'+pct(K.shareRate,0)+' entstehen mit dem Abschluss, der Rest folgt der Fakturierung. Als sofort fällig markierte Positionen zählen vollständig.</div>'+
+
     (()=>{const tot=K.closingPart+K.billedPart+K.openPart||1;
       return '<div class="split">'+
       [[K.closingPart,"var(--plum)"],[K.billedPart,"var(--teal)"],[K.openPart,"var(--line)"]]
@@ -1243,7 +1532,7 @@ function renderSettle(K){
   }).join("");
 
   const right='<div class="card pad" style="margin-top:0"><h2 class="sec">Abgleich Lohnzettel</h2>'+
-    '<div class="hint" style="margin:6px 0 14px">Abgerechnet wird quartalsweise: Q1 im April, Q2 im Juli, Q3 im Oktober und Q4 im Januar des Folgejahres.</div>'+
+    '<div style="height:10px"></div>'+
     '<table><thead><tr><th style="background:var(--plumSoft);color:var(--plum)">Auszahlung</th>'+
     '<th style="background:var(--plumSoft);color:var(--plum);text-align:left">für</th>'+
     ['Fällig','Erhalten','Differenz'].map(h=>'<th style="background:var(--plumSoft);color:var(--plum)">'+h+'</th>').join("")+
@@ -1301,10 +1590,11 @@ function renderPanels(K,data,p,y){
       ["2 · Geschäftsjahr wählen","Rechts daneben das Jahr wählen. Vorjahre bleiben als Archiv erhalten."],
       ["3 · Ziele hinterlegen","Unter Stammdaten die vier Quartalsziele eintragen. Ihre Summe ergibt das Jahresziel."],
       ["4 · Positionen erfassen","Monat aufklappen, Kunde und Nettoumsatz eintragen. Mehrere Zeilen gehen über „Liste einfügen“."],
-      ["5 · Art richtig wählen","Closing zählt einfach, wiederkehrende Closings über ×4. Managed Services und Lizenzen zählen automatisch vierfach."],
+      ["5 · Art richtig wählen","Closings zählen einfach, Managed Services automatisch vierfach. Lizenzen zählen nicht auf das Umsatzziel und werden mit einem festen Satz vergütet."],
       ["6 · Fakturierung pflegen","Die Hälfte der Provision entsteht mit dem Abschluss. Die zweite Hälfte wächst mit den tatsächlich gestellten Rechnungen. Diese im Abschnitt „Fakturierung“ je Monat erfassen."],
       ["7 · Stufe im Blick behalten","Die Leiste zeigt die aktuelle Stufe und wie viel Umsatz bis zur nächsten fehlt."],
       ["8 · Lohnzettel abgleichen","Ausgezahlt wird im April, Juli, Oktober und im Januar des Folgejahres. Je Termin eintragen, was auf dem Lohnzettel stand."],
+      ["Nichts geht verloren","Jede Änderung legt den vorherigen Stand im Verlauf ab, entfernte Mitarbeiter bleiben erhalten. Beides lässt sich unter „Datei“ wiederherstellen."],
       ["9 · Cloud-Synchronisierung","Die App verbindet sich beim Start automatisch und lädt den Stand aus der Cloud. Vor größeren Änderungen unter „Datei“ einmal neu laden."],
       ["Wichtig zu wissen","Alle Beträge sind brutto ohne Umsatzsteuer und ohne Lohnabzüge. Die Stufe greift auf das gesamte Jahr und wirkt rückwirkend."]
     ];
@@ -1329,7 +1619,7 @@ function renderPanels(K,data,p,y){
         :'<button class="btn quiet" data-act="askDelYear">Jahr löschen</button>')+'</div>'+
       '<div class="grid g4">'+
       [0,1,2,3].map(q=>'<div><div class="label">Ziel Q'+(q+1)+'</div><input class="rt num" style="width:100%" value="'+numf(data.targets[q])+'" data-act="target" data-q="'+q+'"></div>').join("")+
-      '<div><div class="label">Anteil bei Abschluss</div><input class="rt" style="width:100%" value="'+numf(data.closingShare*100)+' %" data-act="closingShare"><div class="hint">Rest folgt der Abrechnung</div></div>'+
+      '<div><div class="label">Anteil bei Abschluss</div><input class="rt" style="width:100%" value="'+numf(data.closingShare*100)+' %" data-act="closingShare"></div>'+
       '<div><div class="label">Lizenzprovision</div><input class="rt" style="width:100%" value="'+numf(data.licenceRate*100)+' %" data-act="licenceRate"></div>'+
       '<div><div class="label">Jahresziel</div><div class="box num" style="text-align:right;font-weight:600">'+eur(K.yearTarget)+'</div></div>'+
       '<div><div class="label">Pipeline-Spalte</div><button class="btn" style="width:100%;justify-content:center;'+(data.usePipeline?"background:var(--amberSoft);color:var(--amber);border-color:var(--amber)":"")+'" data-act="togglePipeline">'+(data.usePipeline?"eingeblendet":"ausgeblendet")+'</button></div>'+
@@ -1339,7 +1629,7 @@ function renderPanels(K,data,p,y){
       [["tiers","Staffel nach Jahresziel"],["flat","Fester Satz"]].map(m=>'<button class="btn'+((data.rateMode||"tiers")===m[0]?" solid":"")+'" style="border-radius:999px" data-act="rateMode" data-m="'+m[0]+'">'+m[1]+'</button>').join("")+'</div>'+
       (data.rateMode==="flat"
         ? '<div class="grid g3"><div class="box"><div class="label">Satz auf jeden Umsatz</div><input class="rt" style="width:100%" value="'+numf(data.flatRate*100)+' %" data-act="flatRate"></div>'+
-          '<div class="hint" style="grid-column:span 2;align-self:center">Der Satz gilt unabhängig von der Zielerreichung.</div></div>'
+          '</div>'
         : '<div class="grid g4">'+tiers+'</div>')+
       '<h2 class="sec" style="margin-top:22px;margin-bottom:10px">Darstellung</h2>'+
       '<div class="grid g3"><div><div class="label">Unternehmen</div><input style="width:100%" value="'+esc(state.partnerName||"")+'" data-act="partnerName" placeholder="z. B. much. Consulting"></div>'+
@@ -1360,8 +1650,7 @@ function renderPanels(K,data,p,y){
       '<div class="row between"><div style="font-weight:600;color:var(--plum)">Cloud-Synchronisierung</div>'+
       '<span class="pill" style="font-size:12px;background:'+(saveErr?"var(--coralSoft)":"var(--greenSoft)")+';color:'+(saveErr?"var(--coral)":"var(--green)")+';border:1px solid '+(saveErr?"var(--coral)":"var(--green)")+'">'+
         (saveErr?"nicht erreichbar":"verbunden")+'</span></div>'+
-      '<div class="hint" style="margin:6px 0 10px">Die App verbindet sich beim Start automatisch und lädt den Stand aus <code>commission_docs</code>. '+
-      'Jede Änderung wird sofort zurückgeschrieben. Wenn jemand anderes gespeichert hat, erscheint ein Hinweis.</div>'+
+      '<div style="height:10px"></div>'+
       '<div class="row">'+
       '<button class="btn solid" data-act="sbPull">Aus Cloud laden</button>'+
       '<button class="btn" data-act="sbPush">Jetzt hochladen</button>'+
@@ -1371,8 +1660,8 @@ function renderPanels(K,data,p,y){
       '<div class="grid g2" style="margin-top:8px">'+
       '<div><div class="label">Projekt-URL</div><input style="width:100%" id="sbUrl" value="'+esc(sb.url)+'"></div>'+
       '<div><div class="label">Publishable-Schlüssel</div><input style="width:100%" id="sbKey" value="'+esc(sb.key)+'"></div>'+
-      '<div><div class="label">Team-Kennung</div><input style="width:100%" id="sbDoc" value="'+esc(sb.docId)+'"><div class="hint">Alle mit derselben Kennung teilen einen Stand</div></div>'+
-      '<div><div class="label">Kennzeichnung dieses Geräts</div><input style="width:100%" id="sbDev" value="'+esc(sb.device)+'" placeholder="z. B. Tim"><div class="hint">erscheint bei Änderungshinweisen</div></div>'+
+      '<div><div class="label">Team-Kennung</div><input style="width:100%" id="sbDoc" value="'+esc(sb.docId)+'"></div>'+
+      '<div><div class="label">Kennzeichnung dieses Geräts</div><input style="width:100%" id="sbDev" value="'+esc(sb.device)+'" placeholder="z. B. Tim"></div>'+
       '</div><button class="btn" style="margin-top:8px" data-act="sbApply">Übernehmen</button></details>'+
       '<div id="sbSqlBox" class="hidden" style="margin-top:10px"><div class="hint" style="margin-bottom:6px">Einmalig im SQL Editor des Supabase-Projekts ausführen.</div>'+
       '<textarea readonly rows="12" style="width:100%;font-family:ui-monospace,monospace;font-size:12px">'+esc(SB_SQL)+'</textarea></div>'+
@@ -1382,9 +1671,15 @@ function renderPanels(K,data,p,y){
       '<div class="row"><button class="btn solid" data-act="expExcel">Excel</button>'+
       '<button class="btn" data-act="expCsv">CSV</button>'+
       '<button class="btn" data-act="expJson">JSON-Sicherung</button></div>'+
-      '<div class="hint" style="margin-top:10px">Die JSON-Sicherung enthält alle Mitarbeiter und Jahre.</div>'+
+
       '<div class="row" style="margin-top:10px"><label class="btn">JSON importieren<input type="file" accept=".json,application/json" class="hidden" id="importInput"></label></div>'+
-      '</div></div>';
+      '</div></div>'+
+      '<div class="box" style="margin-top:16px">'+
+      '<div class="row between"><div style="font-weight:600;color:var(--plum)">Verlauf und Wiederherstellung</div>'+
+      '<button class="btn" data-act="histLoad">Verlauf laden</button></div>'+
+      '<div id="histBox" style="margin-top:10px"><div class="hint">Die letzten '+HIST_MAX+
+      ' Stände je Mitarbeiter werden mitgeführt. Entfernte Mitarbeiter bleiben erhalten.</div></div>'+
+      '</div>';
   }
 }
 
@@ -1480,27 +1775,39 @@ document.addEventListener("click",e=>{
   const data=D(), K=calc();
   switch(a){
     case "closePanel": panel=""; render(); break;
-    case "selProfile": state.activeProfileId=id; save(); break;
+    case "selProfile": state.activeProfileId=id; render(); break;
+    case "doUnlock": {
+      const pass=(document.getElementById("unlockPass")||{}).value||"";
+      const rem=(document.getElementById("unlockRemember")||{}).checked;
+      unlockProfile(P().id,pass,rem).then(ok=>{
+        if(!ok){ const e=document.getElementById("unlockErr");
+          if(e){e.textContent="Code stimmt nicht.";e.classList.remove("hidden");}
+          const f=document.getElementById("unlockPass"); if(f){f.value="";f.focus();} }
+      });
+      break;}
     case "askProfile": newNameOpen=true; render(); break;
     case "cancelProfile": newNameOpen=false; render(); break;
     case "createProfile": {
       const v=(document.getElementById("newNameInput").value||"").trim();
       const np=newProfile(v,new Date().getFullYear());
-      state.profiles.push(np); state.activeProfileId=np.id; newNameOpen=false; save();
+      state.profiles.push(np); state.activeProfileId=np.id; newNameOpen=false;
+      markDirty(metaKey()); markDirty(rowKey(np.id)); save();
       flash('Mitarbeiter „'+(v||"ohne Namen")+'" angelegt.'); break;}
     case "askDelProfile": confirmAction="del:"+id; render(); break;
     case "cancelConfirm": confirmAction=""; render(); break;
     case "delProfile": {
       if(state.profiles.length===1){flash("Der letzte Mitarbeiter kann nicht gelöscht werden.");confirmAction="";render();break;}
+      const gone=state.profiles.find(x=>x.id===id);
       const i=state.profiles.findIndex(x=>x.id===id);
       state.profiles.splice(i,1);
       if(state.activeProfileId===id)state.activeProfileId=state.profiles[Math.min(i,state.profiles.length-1)].id;
-      confirmAction=""; save(); flash("Mitarbeiter gelöscht."); break;}
+      confirmAction=""; markDirty(metaKey()); save();
+      retireRow(rowKey(id),gone); flash("Mitarbeiter entfernt. Er lässt sich unter „Datei“ wiederherstellen."); break;}
     case "moveProfile": {
       const i=state.profiles.findIndex(x=>x.id===id), to=i+Number(t.dataset.dir);
       if(to<0||to>=state.profiles.length)break;
-      const arr=state.profiles;[arr[i],arr[to]]=[arr[to],arr[i]];save();break;}
-    case "selYear": P().activeYear=t.dataset.y; save(); break;
+      const arr=state.profiles;[arr[i],arr[to]]=[arr[to],arr[i]];markDirty(metaKey());save();break;}
+    case "selYear": P().activeYear=t.dataset.y; markDirty(rowKey(P().id)); save(); break;
     case "askYear": newYearOpen=true; render(); break;
     case "cancelYear": newYearOpen=false; render(); break;
     case "createYear": {
@@ -1583,8 +1890,8 @@ document.addEventListener("click",e=>{
       pasteFor=null; pasteReview=null; render(); break;}
     case "rateMode": patchYear({rateMode:t.dataset.m}); break;
     case "togglePipeline": patchYear({usePipeline:!data.usePipeline}); break;
-    case "togglePlate": state.logoPlate=state.logoPlate===false; save(); break;
-    case "clearLogo": state.logoUrl=""; save(); break;
+    case "togglePlate": state.logoPlate=state.logoPlate===false; markDirty(metaKey()); save(); break;
+    case "clearLogo": state.logoUrl=""; markDirty(metaKey()); save(); break;
     case "sbSql": document.getElementById("sbSqlBox").classList.toggle("hidden"); break;
     case "sbApply": {
       const g=i=>document.getElementById(i);
@@ -1606,6 +1913,10 @@ document.addEventListener("click",e=>{
       else { try{ ok=document.execCommand("copy"); }catch(e){} }
       flash(ok?"Der Entwurf liegt in der Zwischenablage.":"Bitte den markierten Text mit Strg+C kopieren.");
       break;}
+
+    case "histLoad": renderHistory(); break;
+    case "histRestore": restoreVersion(P().id,Number(t.dataset.i)); break;
+    case "profRestore": restoreProfile(id); break;
     case "expCsv": expCsv(); break;
     case "expExcel": expExcel(); break;
     case "expJson": expJson(); break;
@@ -1621,7 +1932,7 @@ document.addEventListener("change",e=>{
   if(t.id==="logoInput"&&t.files[0]){
     const f=t.files[0];
     if(f.size>2*1024*1024){flash("Die Datei ist größer als 2 MB.");return;}
-    const r=new FileReader();r.onload=()=>{state.logoUrl=String(r.result);save();};r.readAsDataURL(f);
+    const r=new FileReader();r.onload=()=>{state.logoUrl=String(r.result);markDirty(metaKey());save();};r.readAsDataURL(f);
     setTimeout(()=>{t.value="";},1500); return;
   }
   if(t.id==="importInput"&&t.files[0]){
@@ -1667,7 +1978,7 @@ document.addEventListener("change",e=>{
     case "flatRate": patchYear({flatRate:(parseAmount(t.value)||0)/100}); break;
     case "tierMin": patchYear({tiers:data.tiers.map((x,j)=>j===i?{...x,min:(parseAmount(t.value)||0)/100}:x)}); break;
     case "tierRate": patchYear({tiers:data.tiers.map((x,j)=>j===i?{...x,rate:(parseAmount(t.value)||0)/100}:x)}); break;
-    case "partnerName": state.partnerName=t.value; save(); break;
+    case "partnerName": state.partnerName=t.value; markDirty(metaKey()); save(); break;
   }
 });
 
