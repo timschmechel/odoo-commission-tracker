@@ -256,7 +256,8 @@
   <div class="grid g2" style="margin-top:24px" id="settleWrap"></div>
   <section id="monthsTable" class="card" style="overflow-x:auto"></section>
   <p class="hint" style="margin-top:24px">
-    Alle Beträge brutto. Die Provisionsstufe richtet sich nach der Jahreszielerreichung und wirkt auf den
+    Umsätze als Nettobeträge ohne Umsatzsteuer, Provisionen als Bruttobeträge vor Lohnabzügen.
+    Die Provisionsstufe richtet sich nach der Jahreszielerreichung und wirkt auf den
     gesamten Jahresumsatz. Managed Services zählen vierfach, Closings einfach. Lizenzen zählen nicht auf
     das Umsatzziel und werden mit einem festen Satz vergütet.
   </p>
@@ -302,17 +303,15 @@ function parsePaste(text){
   const out=[];
   for(const line of String(text).split(/\r?\n/)){
     const t=line.trim(); if(!t)continue;
-    let recurring=/(recurring|wiederkehrend|abo|monatlich)/i.test(t);
     const work=t.replace(/(recurring|wiederkehrend|abo|monatlich)/gi,"").trim();
     let parts=work.split(/\t|;|\s{2,}|\|/).map(p=>p.trim()).filter(Boolean);
     if(parts.length===1){const m=work.match(/^(.*?)[\s]+([\d.,*x×\s€eur]+)$/i);parts=m?[m[1].trim(),m[2].trim()]:[work];}
     let amount=NaN,idx=-1;
     for(let i=parts.length-1;i>=0;i--){const v=parseAmount(parts[i]);if(Number.isFinite(v)&&/\d/.test(parts[i])){amount=v;idx=i;break;}}
     if(!Number.isFinite(amount))continue;
-    if(/[*x×]/i.test(parts[idx]))recurring=false;
     const rest=parts.filter((_,i)=>i!==idx);
     out.push({id:uid(),customer:(rest[0]||"Ohne Bezeichnung").trim(),note:rest.slice(1).join(" · ").trim(),
-      amount,recurring,type:"closing",prepaid:false,billed:0});
+      amount,type:"closing",prepaid:false,bills:[]});
   }
   return out;
 }
@@ -382,16 +381,25 @@ function calc(){
   const tier=flat?{rate:Number(data.flatRate)||0}:(revenue>0&&yearTarget>0?tierFor(ach,data.tiers):{rate:0});
   const gross=revenue*tier.rate;
 
+  /* Ein Auszahlungstermin, für den bereits eine Zahlung erfasst ist, behält den
+     damals gültigen Satz. Der Unterschied zum heutigen Satz wird als Nachzahlung geführt. */
+  const locks=Array.isArray(data.rateLocks)?data.rateLocks:[null,null,null,null];
+  const qRate=q=>{const v=locks[q];return (v===null||v===undefined||!Number.isFinite(v))?tier.rate:v;};
+  let nachzahlung=0;
+
   let closingPart=0,billedPart=0,openPart=0;
   const qB=[0,1,2,3].map(()=>({total:0,closing:0,billed:0,open:0,licence:0,prepaid:0}));
   for(let m=0;m<12;m++){const qi=Math.floor(m/3);
     (data.deals[m]||[]).forEach(d=>{const t=TYPES[d.type];
       if(d.type==="licence"){qB[qi].licence+=dealValue(d)*data.licenceRate;return;}
       if(!t.target)return;
-      const a=dealAccrual(d,tier.rate,share);
-      closingPart+=a.atClosing; openPart+=a.open;
-      qB[qi].closing+=a.atClosing; qB[qi].total+=a.atClosing; qB[qi].open+=a.open;
-      if(d.prepaid)qB[qi].prepaid+=a.total;});}
+      /* Anteile bei Satz 1 berechnen und je Quartal mit dem dort gültigen Satz bewerten */
+      const e=dealAccrual(d,1,share);
+      const r=qRate(qi);
+      closingPart+=e.atClosing*r; openPart+=e.open*tier.rate;
+      nachzahlung+=e.atClosing*(tier.rate-r);
+      qB[qi].closing+=e.atClosing*r; qB[qi].total+=e.atClosing*r; qB[qi].open+=e.open*tier.rate;
+      if(d.prepaid)qB[qi].prepaid+=e.total*r;});}
 
   /* Rechnungen aller Jahre: eine Faktura wirkt im Quartal ihres eigenen Datums,
      auch wenn der Auftrag in einem früheren Geschäftsjahr gewonnen wurde. */
@@ -400,11 +408,18 @@ function calc(){
   allDealsAcrossYears().forEach(x=>{
     const fremd=Number(x.yearKey)!==thisYear;
     if(fremd&&x.acc.open>0)carryOpen+=x.acc.open;
-    x.acc.bills.forEach(b=>{
+    /* Anteile bei Satz 1, damit der Satz des Auszahlungsquartals angewendet werden kann */
+    const e=dealAccrual(x.deal,1,x.share);
+    e.bills.forEach(b=>{
       if(Number(b.y!=null?b.y:x.yearKey)!==thisYear)return;
       const bq=Math.floor(Math.min(Math.max(b.m,0),11)/3);
-      billedPart+=b.com; qB[bq].billed+=b.com; qB[bq].total+=b.com;
-      if(fremd)carryBilled+=b.com;
+      /* Aufträge aus Vorjahren behalten den Satz ihres Ursprungsjahres */
+      const voll=fremd?x.rate:tier.rate;
+      const r=fremd?x.rate:qRate(bq);
+      const com=b.com*r;
+      billedPart+=com; qB[bq].billed+=com; qB[bq].total+=com;
+      nachzahlung+=b.com*(voll-r);
+      if(fremd)carryBilled+=com;
     });
   });
 
@@ -435,6 +450,8 @@ function calc(){
     o.current=yr===cy&&q===cq;
     o.payoutMonth=PAY[q].m;o.payoutYear=yr+PAY[q].o;
     o.payoutDue=o.payoutYear<cy||(o.payoutYear===cy&&o.payoutMonth<=now.getMonth());
+    o.rate=qRate(q);
+    o.locked=Number.isFinite(locks[q])&&locks[q]!==null;
     o.received=Number((data.payoutsQ||[])[q])||0;
     o.payoutDiff=o.received-o.comDue;
     return o;});
@@ -442,13 +459,15 @@ function calc(){
   const payoutsDueCount=quarters.filter(q=>q.payoutDue).length;
   const dueSettled=quarters.filter(q=>q.payoutDue).reduce((a,q)=>a+q.comDue,0);
   const duePending=quarters.filter(q=>!q.payoutDue).reduce((a,q)=>a+q.comDue,0);
-  const paid=quarters.reduce((a,q)=>a+q.received,0);
+  const paid=quarters.filter(q=>q.payoutDue).reduce((a,q)=>a+q.received,0);
+  const paidVorab=quarters.filter(q=>!q.payoutDue).reduce((a,q)=>a+q.received,0);
 
   return{data,monthly,quarters,yearTarget,revenue,pipeline,licence,ach,rate:tier.rate,flat,
     carryBilled,carryOpen,
     gross,licGross,commissionTotal,closingPart,billedPart,openPart,shareRate:share,
     due:closingPart+billedPart+licGross,fAch,fRate:fTier.rate,forecastTotal:fTotal*fTier.rate+licGross,
-    step,payoutsDueCount,dueSettled,duePending,paid,diff:paid-dueSettled};
+    step,payoutsDueCount,dueSettled,duePending,paid,paidVorab,nachzahlung,
+    locks,diff:paid-dueSettled};
 }
 
 function payrollState(diff,paid,dueCount){
@@ -628,6 +647,14 @@ async function writeRow(id,data){
     if(!rows.length)return{conflict:true};
     remoteStamp[id]=rows[0].updated_at; return{ok:true};
   }
+  /* Ohne bekannten Zeitstempel zuerst prüfen, ob die Zeile bereits existiert */
+  try{
+    const vor=await sbFetch("commission_docs?id=eq."+encodeURIComponent(id)+"&select=updated_at",{headers:sbHeaders(false)});
+    if(vor.ok){
+      const da=await vor.json();
+      if(da.length){ remoteStamp[id]=da[0].updated_at; return{conflict:true}; }
+    }
+  }catch(e){}
   const r=await sbFetch("commission_docs?on_conflict=id",
     {method:"POST",headers:{...sbHeaders(true),Prefer:"resolution=merge-duplicates,return=representation"},
      body:JSON.stringify([{id,data,updated_at:stamp,updated_by:sb.device||"unbekannt"}])});
@@ -654,10 +681,11 @@ async function sbPush(all){
   const keys=all?new Set([metaKey(),...state.profiles.map(p=>rowKey(p.id))]):new Set(dirty);
   if(!keys.size)return true;
 
+  const offen=new Set();
   if(keys.has(metaKey())){
     const res=await writeRow(metaKey(),{kind:"meta",order:state.profiles.map(p=>p.id),
       partnerName:state.partnerName||"",logoUrl:state.logoUrl||"",logoPlate:state.logoPlate!==false});
-    if(res.conflict)conflict=metaKey();
+    if(res.conflict){conflict=metaKey();offen.add(metaKey());}
     keys.delete(metaKey());
   }
   for(const k of keys){
@@ -668,14 +696,16 @@ async function sbPush(all){
     if(!data)continue;
     const vorher=lastSaved[k];
     const res=await writeRow(k,data);
-    if(res.conflict){ conflict=k; continue; }
+    if(res.conflict){ conflict=k; offen.add(k); continue; }
     lastSaved[k]=JSON.parse(JSON.stringify(data));
     if(vorher)await pushHistory(id,vorher);
   }
-  dirty.clear();
+  /* Nur erfolgreich geschriebene Zeilen gelten als erledigt, Konflikte bleiben vorgemerkt */
+  dirty=new Set([...offen]);
   if(conflict){
     saveErr="Konflikt: ein anderer Stand ist neuer";
-    flash("Diese Zeile wurde zwischenzeitlich von jemand anderem geändert und wurde deshalb nicht überschrieben. Bitte über „Aus Cloud laden“ aktualisieren.");
+    flash("Diese Zeile wurde zwischenzeitlich von jemand anderem geändert und deshalb nicht überschrieben. "+
+      "Die eigene Änderung bleibt vorgemerkt. Bitte über „Aus Cloud laden“ aktualisieren.");
     return false;
   }
   return true;
@@ -711,7 +741,7 @@ function pruefeBetrag(v,label){
 function pruefeRechnung(deal,dealMonth,dealYear,betrag,monat,jahr){
   const b=pruefeBetrag(betrag,"Der Rechnungsbetrag");
   if(b.fehler)return b;
-  const rest=dealValue(deal)-billedSum(deal);
+  const rest=billBase(deal)-billedSum(deal);
   const warnungen=[];
   if(betrag>rest+0.5)
     warnungen.push("Die Rechnung übersteigt den offenen Auftragswert um "+eur(betrag-rest)+
@@ -1401,9 +1431,18 @@ function allDealsAcrossYears(){
   return out;
 }
 
+/* Bezugsgröße für den Fakturierungsfortschritt. Bei Managed Services ist der
+   gewertete Umsatz das Vierfache, fakturiert wird aber der tatsächliche Auftrag.
+   Deshalb zählt hier der eingegebene Betrag, überschreibbar je Position. */
+function billBase(d){
+  const eigen=Number(d.billBase);
+  if(Number.isFinite(eigen)&&eigen>0)return eigen;
+  return (TYPES[d.type]||TYPES.closing).factor>1 ? (Number(d.amount)||0) : dealValue(d);
+}
+
 function dealAccrual(d,rate,share){
-  const value=dealValue(d), total=value*rate;
-  if(d.prepaid)return{value,total,atClosing:total,bills:[],open:0,billed:value,ratio:1};
+  const value=billBase(d), gewertet=dealValue(d), total=gewertet*rate;
+  if(d.prepaid)return{value,gewertet,total,atClosing:total,bills:[],open:0,billed:value,ratio:1};
   const atClosing=total*share;
   const secondHalf=total*(1-share);
   let cum=0; const bills=[];
@@ -1414,7 +1453,7 @@ function dealAccrual(d,rate,share){
     if(counted>0)bills.push({id:b.id,m:b.m,y:b.y,amount:amt,counted,com:secondHalf*(counted/value)});
   });
   const ratio=value>0?Math.min(cum/value,1):0;
-  return{value,total,atClosing,bills,open:secondHalf*(1-ratio),billed:cum,ratio};
+  return{value,gewertet,total,atClosing,bills,open:secondHalf*(1-ratio),billed:cum,ratio};
 }
 
 /* Satz einer Position: Lizenzen fest, alles andere nach Jahresstufe */
@@ -1515,7 +1554,7 @@ function billEditorHtml(d,m,rate,yk){
     '<select id="nbM" style="font-size:12px;padding:5px 8px">'+
       MONTHS.map((n,i)=>'<option value="'+i+'"'+(i===vorschlag.m?" selected":"")+'>'+n+'</option>').join("")+'</select>'+
     '<select id="nbY" style="font-size:12px;padding:5px 8px">'+yearOpts(vorschlag.y)+'</select>'+
-    '<input id="nbA" class="rt" style="width:130px" placeholder="Betrag netto"'+(d.prepaid?" disabled":"")+'>'+
+    '<input id="nbA" class="rt" style="width:130px" placeholder="Nettoumsatz"'+(d.prepaid?" disabled":"")+'>'+
     '<button class="btn solid" data-act="billAdd" data-id="'+d.id+'" data-m="'+m+'"'+(d.prepaid?" disabled":"")+'>Rechnung erfassen</button>'+
     (restUmsatz>0&&!d.prepaid?'<button class="btn" data-act="billRest" data-id="'+d.id+'" data-m="'+m+
       '" title="Bucht den noch nicht fakturierten Umsatz und macht damit '+esc(eur(a.open))+' Provision fällig">Rest '+
@@ -1533,7 +1572,7 @@ function dealRow(d,m,data,rate){
     '<input class="bare grow c-notiz" style="min-width:90px;font-size:12px;color:var(--muted)" value="'+esc(d.note||"")+'" data-act="dealField" data-f="note" data-id="'+d.id+'" data-m="'+m+'" placeholder="Notiz">'+
     '<select class="c-typ" style="background:'+t.bg+';color:'+t.color+';border:none;font-size:12px;font-weight:600;padding:4px 6px" data-act="dealField" data-f="type" data-id="'+d.id+'" data-m="'+m+'">'+opts+'</select>'+
     (auto?'<span class="chip c-x4" style="background:'+t.bg+';color:'+t.color+'">×4</span>':'')+
-    '<input class="bare rt num c-betrag" style="width:104px" value="'+numf(d.amount)+'" data-act="dealAmount" data-id="'+d.id+'" data-m="'+m+'" title="Betrag netto" placeholder="Betrag">'+
+    '<input class="bare rt num c-betrag" style="width:104px" value="'+numf(d.amount)+'" data-act="dealAmount" data-id="'+d.id+'" data-m="'+m+'" title="Nettoumsatz ohne Umsatzsteuer" placeholder="Betrag">'+
     '<span class="num c-gewertet" style="width:104px;text-align:right;font-weight:600;color:'+t.color+'" title="gewerteter Umsatz">'+eur(dealValue(d))+'</span>'+
     comChip(d,rate)+
     (t.target?billCell(d,m,rate):'<span class="c-fakt" style="width:186px"></span>')+
@@ -1570,7 +1609,7 @@ function renderQuarters(K,data){ // K.rate steuert die Anzeige der Halbierung
           '<div class="row">'+
           '<input id="nc'+m+'" placeholder="Kunde" style="flex:1;min-width:140px">'+
           '<input id="nn'+m+'" placeholder="Notiz, optional" style="flex:1;min-width:120px">'+
-          '<input id="na'+m+'" placeholder="Betrag netto" class="rt" style="width:140px">'+
+          '<input id="na'+m+'" placeholder="Nettoumsatz" class="rt" style="width:140px">'+
           '<select id="nt'+m+'">'+(data.usePipeline?["closing","managed","licence","pipeline"]:["closing","managed","licence"]).map(k=>'<option value="'+k+'">'+TYPES[k].label+'</option>').join("")+'</select>'+
 
           '<button class="btn solid" data-act="addDeal" data-m="'+m+'">Hinzufügen</button>'+
@@ -1820,6 +1859,7 @@ function renderSettle(K){
      ["Zielerreichung",K.yearTarget>0?pct(K.ach):"–",""],["Provisionssatz",K.rate?rateLabel(K.rate):"–","color:var(--plum)"],
      ["Provision auf Umsatz",eur(K.gross),""],["Lizenzumsatz gewertet",eur(K.licence),""],
      ["Lizenzprovision",eur(K.licGross),"color:var(--green)"]]
+      .concat(K.nachzahlung>0.5?[["Nachzahlung aus Stufensprung",eur(K.nachzahlung),"color:var(--amber)"]]:[])
       .concat(K.carryBilled>0?[["Rechnungen zu Projekten aus Vorjahren",eur(K.carryBilled),"color:var(--teal)"]]:[])
       .concat(K.carryOpen>0?[["Davon noch offen in Vorjahresprojekten",eur(K.carryOpen),"color:var(--amber)"]]:[])
       .map(r=>'<tr><td style="color:var(--muted)">'+r[0]+'</td><td class="num" style="font-weight:600;'+r[2]+'">'+r[1]+'</td></tr>').join("")+
@@ -1843,7 +1883,8 @@ function renderSettle(K){
       :q.payoutDiff<-.5?"var(--coral)":q.payoutDiff>.5?"var(--amber)":"var(--muted)";
     return '<tr style="opacity:'+(q.payoutDue?1:.55)+'"><td><b>'+MONTHS[q.payoutMonth]+' '+q.payoutYear+'</b>'+
       (!q.payoutDue?'<span class="tag" style="background:var(--paper);color:var(--slate);border:1px solid var(--line)">steht aus</span>':'')+'</td>'+
-      '<td style="text-align:left;color:var(--muted)">Q'+(q.q+1)+'</td>'+
+      '<td style="text-align:left;color:var(--muted)">Q'+(q.q+1)+
+        (q.locked?'<div class="hint">Satz '+rateLabel(q.rate)+' festgehalten</div>':'')+'</td>'+
       '<td class="num" style="font-weight:600">'+eur(q.comDue)+'</td>'+
       '<td><input class="rt num" style="width:120px" value="'+numf(q.received)+'" data-act="payout" data-q="'+q.q+'"></td>'+
       '<td class="num" style="font-weight:600;color:'+col+'">'+(q.payoutDue?(q.payoutDiff>0?"+":"")+eur(q.payoutDiff):"–")+'</td></tr>';
@@ -1865,6 +1906,8 @@ function renderSettle(K){
     (st.key==="short"?'<button class="btn solid" style="background:var(--coral);border-color:var(--coral)" data-act="claimOpen">'+
       'Rückfrage an Team Lead erstellen</button>':'')+
     (K.duePending>0?'<div class="hint" style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-top:8px">Für spätere Termine sind bereits <b>'+eur(K.duePending)+'</b> aufgelaufen. Dieser Betrag zählt hier noch nicht mit.</div>':'')+
+    (K.paidVorab>0?'<div class="hint" style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-top:8px">Auf noch nicht fällige Termine sind <b>'+eur(K.paidVorab)+'</b> eingetragen. Diese bleiben bis zum jeweiligen Termin außen vor.</div>':'')+
+    (K.nachzahlung>0.5?'<div class="hint" style="background:var(--amberSoft);border:1px solid var(--amber);border-radius:6px;padding:8px 10px;margin-top:8px">Durch den Stufensprung auf '+rateLabel(K.rate)+' sind zusätzlich <b>'+eur(K.nachzahlung)+'</b> für bereits abgerechnete Quartale entstanden. Das ist keine Fehlbuchung, sondern eine Nachzahlung.</div>':'')+
     '<div id="claimBox" class="hidden box" style="margin-top:12px;background:#fff"></div>'+
     '</div></div></div>';
 
@@ -1912,7 +1955,7 @@ function renderPanels(K,data,p,y){
       ["6 · Fakturierung pflegen","Die Hälfte der Provision entsteht mit dem Abschluss. Die zweite Hälfte wächst mit den tatsächlich gestellten Rechnungen. Diese im Abschnitt „Fakturierung“ je Monat erfassen."],
       ["7 · Stufe im Blick behalten","Die Leiste zeigt die aktuelle Stufe und wie viel Umsatz bis zur nächsten fehlt."],
       ["8 · Lohnzettel abgleichen","Ausgezahlt wird im April, Juli, Oktober und im Januar des Folgejahres. Je Termin eintragen, was auf dem Lohnzettel stand."],
-      ["Nichts geht verloren","Jede Änderung legt den vorherigen Stand im Verlauf ab, entfernte Mitarbeiter bleiben erhalten. Beides lässt sich unter „Datei“ wiederherstellen."],
+      ["Verlauf","Die letzten Speicherstände je Mitarbeiter bleiben erhalten, ältere fallen heraus. Entfernte Mitarbeiter bleiben dauerhaft wiederherstellbar."],
       ["9 · Cloud-Synchronisierung","Die App verbindet sich beim Start automatisch und lädt den Stand aus der Cloud. Vor größeren Änderungen unter „Datei“ einmal neu laden."],
       ["Wichtig zu wissen","Alle Beträge sind brutto ohne Umsatzsteuer und ohne Lohnabzüge. Die Stufe greift auf das gesamte Jahr und wirkt rückwirkend."]
     ];
@@ -2011,8 +2054,8 @@ function exportRows(){
   const rows=[["Vertriebler","Jahr","Monat","Art","Kunde","Notiz","Betrag","Faktor","Gewertet","Fakturiert","Fortschritt %","Sofort fällig"]];
   for(let m=0;m<12;m++)(data.deals[m]||[]).forEach(d=>rows.push([p.name,y,MONTHS[m],TYPES[d.type].label,d.customer,d.note||"",
     Number(d.amount)||0,typeFactor(d),dealValue(d),
-    TYPES[d.type].target?billedSum(d):"",
-    TYPES[d.type].target&&dealValue(d)>0?Math.round(Math.min(billedSum(d)/dealValue(d),1)*100):"",
+    TYPES[d.type].target?Math.min(billedSum(d),billBase(d)):"",
+    TYPES[d.type].target&&billBase(d)>0?Math.round(Math.min(billedSum(d)/billBase(d),1)*100):"",
     TYPES[d.type].target?(d.prepaid?"ja":"nein"):""]));
   return rows;
 }
@@ -2024,6 +2067,7 @@ function summaryRows(){
     ["Provision auf Umsatz",K.gross],["Lizenzumsatz",K.licence],["Lizenzprovision",K.licGross],
     ["Provision gesamt",K.commissionTotal],["Anteil bei Abschluss",K.closingPart],
     ["Anteil aus Abrechnung",K.billedPart],["Noch offen",K.openPart],
+    ["Nachzahlung aus Stufensprung",K.nachzahlung],
     ["Fällig aus erreichten Terminen",K.dueSettled],["Laut Lohnzettel erhalten",K.paid],["Differenz",K.diff],[],
     ["Quartal","Umsatz","Provision gesamt","Bei Abschluss","Aus Abrechnung","Lizenzen","Fällig","Noch offen","Status"]];
   K.quarters.forEach(q=>r.push(["Q"+(q.q+1),q.revenue,q.comTotal,q.comClosing,q.comBilled,q.comLicence,q.comDue,q.comOpen,
@@ -2043,14 +2087,17 @@ function download(content,filename,mime){
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 }
 function expCsv(){
-  const cell=c=>typeof c==="number"?String(c).replace(".",","):'"'+String(c??"").replace(/"/g,'""')+'"';
+  const cell=c=>typeof c==="number"
+    ? (Math.round(c*100)/100).toFixed(2).replace(".",",")
+    : '"'+String(c??"").replace(/"/g,'""')+'"';
   const body=[...exportRows(),[],...summaryRows()].map(r=>r.map(cell).join(";")).join("\n");
   download("\uFEFF"+body,fileBase("csv"),"text/csv;charset=utf-8");
 }
 function sheetXml(name,rows){
   return '<Worksheet ss:Name="'+name+'"><Table>'+rows.map(r=>'<Row>'+r.map(c=>{
     const num=typeof c==="number"&&Number.isFinite(c);
-    return '<Cell><Data ss:Type="'+(num?"Number":"String")+'">'+esc(num?c:(c??""))+'</Data></Cell>';
+    return '<Cell><Data ss:Type="'+(num?"Number":"String")+'">'+
+      esc(num?Math.round(c*100)/100:(c??""))+'</Data></Cell>';
   }).join("")+'</Row>').join("")+'</Table></Worksheet>';
 }
 function expExcel(){
@@ -2182,7 +2229,6 @@ document.addEventListener("click",e=>{
         customer:(document.getElementById("nc"+m).value||"").trim()||"Ohne Bezeichnung",
         note:(document.getElementById("nn"+m).value||"").trim(),amount,
         type:document.getElementById("nt"+m).value,
-        recurring:false,
         prepaid:false,bills:[]}]);
       {
         const ty=document.getElementById("nt"+m).value;
@@ -2213,7 +2259,7 @@ document.addEventListener("click",e=>{
     case "billRest": {
       const mm=Number(document.getElementById("nbM").value);
       const deal=findDeal(m,id); if(!deal)break;
-      const rest=dealValue(deal)-billedSum(deal);
+      const rest=billBase(deal)-billedSum(deal);
       if(rest<=0){flash("Es ist bereits alles fakturiert.");break;}
       const yy2=Number((document.getElementById("nbY")||{}).value||YKEY());
       writeDeal(m,id,x=>({...x,bills:[...billsOf(x),{id:uid(),m:mm,y:yy2,amount:rest}]}));
@@ -2333,7 +2379,7 @@ document.addEventListener("change",e=>{
   }
   if(!a)return;
   const m=Number(t.dataset.m), id=t.dataset.id, q=Number(t.dataset.q), i=Number(t.dataset.i);
-  const data=D();
+  const data=D(), K=calc();
   switch(a){
     case "dealField": setDeals(m,l=>l.map(x=>x.id===id?{...x,[t.dataset.f]:t.value}:x)); break;
     case "dealAmount": {
@@ -2362,7 +2408,15 @@ document.addEventListener("change",e=>{
     case "payout": {
       const chk=pruefeBetrag(parseAmount(t.value)||0,"Der erhaltene Betrag");
       if(chk.fehler)flash(chk.fehler);
-      const pq=[...(data.payoutsQ||[0,0,0,0])]; pq[q]=chk.wert; patchYear({payoutsQ:pq}); break;}
+      const pq=[...(data.payoutsQ||[0,0,0,0])]; pq[q]=chk.wert;
+      const lk=[...(Array.isArray(data.rateLocks)?data.rateLocks:[null,null,null,null])];
+      if(chk.wert>0&&(lk[q]===null||lk[q]===undefined)){
+        lk[q]=K.rate;
+        flash("Für Q"+(q+1)+" wurde der Satz von "+rateLabel(K.rate)+" festgehalten. "+
+          "Spätere Stufensprünge erscheinen als Nachzahlung statt als Differenz.");
+      }
+      if(chk.wert===0)lk[q]=null;
+      patchYear({payoutsQ:pq,rateLocks:lk}); break;}
     case "closingShare": case "licenceRate": case "flatRate": {
       let v=(parseAmount(t.value)||0)/100;
       if(v<0){v=0;flash("Ein Prozentsatz kann nicht negativ sein.");}
