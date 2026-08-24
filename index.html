@@ -331,7 +331,7 @@ const newProfile=(name,year)=>({id:uid(),name,activeYear:String(year),years:{[St
 /*  Zustand                                                          */
 /* ================================================================= */
 let state=null, openMonth=new Date().getMonth(), panel="", savedAt=null, saveErr="";
-let suche="", billFor=null, billYk=null, pasteFor=null, pasteReview=null, confirmAction="", newNameOpen=false, newYearOpen=false;
+let suche="", typFilter="alle", billFor=null, billYk=null, pasteFor=null, pasteReview=null, confirmAction="", newNameOpen=false, newYearOpen=false;
 
 const P=()=>state.profiles.find(p=>p.id===state.activeProfileId)||state.profiles[0];
 const YKEY=()=>P().activeYear;
@@ -1107,37 +1107,59 @@ function renderSearch(K,data){
   const el=document.getElementById("search");
   const q=suche.trim().toLowerCase();
   const share=Number.isFinite(data.closingShare)?data.closingShare:.5;
+  const arten=data.usePipeline?["closing","managed","licence","pipeline"]:["closing","managed","licence"];
+
   let treffer=[];
-  if(q.length>=2){
-    for(let m=0;m<12;m++)(data.deals[m]||[]).forEach(d=>{
+  for(let m=0;m<12;m++)(data.deals[m]||[]).forEach(d=>{
+    if(typFilter!=="alle"&&d.type!==typFilter)return;
+    if(q.length>=2){
       const text=(d.customer+" "+(d.note||"")).toLowerCase();
-      if(text.includes(q))treffer.push({m,d});
-    });
-  }
+      if(!text.includes(q))return;
+    }
+    treffer.push({m,d});
+  });
+  const aktiv=q.length>=2||typFilter!=="alle";
+  if(aktiv)treffer.sort((a,b)=>a.m-b.m||a.d.customer.localeCompare(b.d.customer));
+
   const summe=treffer.reduce((a,x)=>a+dealValue(x.d),0);
+  const prov=treffer.reduce((a,x)=>a+dealCommission(x.d,K.rate),0);
+
+  const filterChips=[["alle","Alle"]].concat(arten.map(k=>[k,TYPES[k].label]))
+    .map(([k,l])=>{
+      const on=typFilter===k;
+      const c=k==="alle"?"var(--plum)":TYPES[k].color, bg=k==="alle"?"var(--plumSoft)":TYPES[k].bg;
+      return '<button class="btn quiet" style="padding:4px 12px;font-size:12px;border-radius:999px;border:1px solid '+
+        (on?c:"var(--line)")+';background:'+(on?bg:"#fff")+';color:'+(on?c:"var(--muted)")+'"'+
+        ' data-act="typFilter" data-t="'+k+'">'+l+'</button>';
+    }).join("");
 
   el.innerHTML=
     '<div class="row" style="gap:10px">'+
     '<input id="searchInput" value="'+esc(suche)+'" placeholder="Kunde oder Notiz suchen"'+
-      ' style="flex:1;min-width:180px" data-act="search">'+
-    (suche?'<button class="btn quiet" data-act="searchClear">Leeren</button>':'')+
-    (q.length>=2?'<span class="hint">'+treffer.length+(treffer.length===1?" Treffer":" Treffer")+
-      (treffer.length?" · "+eur(summe)+" gewertet":"")+'</span>':'')+
+      ' style="flex:1;min-width:170px" data-act="search">'+
+    filterChips+
+    ((suche||typFilter!=="alle")?'<button class="btn quiet" data-act="searchClear">Zurücksetzen</button>':'')+
     '</div>'+
-    (q.length>=2&&treffer.length?
-      '<div style="margin-top:10px;max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:8px">'+
+    (aktiv?
+      (treffer.length?
+      '<div class="row hint" style="margin-top:8px;gap:16px">'+
+      '<span><b>'+treffer.length+'</b> '+(treffer.length===1?"Position":"Positionen")+'</span>'+
+      '<span>Umsatz gewertet <b class="num">'+eur(summe)+'</b></span>'+
+      '<span>Provision <b class="num" style="color:var(--plum)">'+eur(prov)+'</b></span></div>'+
+      '<div style="margin-top:8px;max-height:300px;overflow-y:auto;border:1px solid var(--line);border-radius:8px">'+
       '<table>'+treffer.map(x=>{
         const t=TYPES[x.d.type], a=t.target?dealAccrual(x.d,K.rate,share):null;
         return '<tr><td style="text-align:left"><b>'+esc(x.d.customer)+'</b>'+
           (x.d.note?'<span class="hint"> · '+esc(x.d.note)+'</span>':'')+
-          '<span class="tag" style="background:'+t.bg+';color:'+t.color+'">'+t.label+'</span></td>'+
+          (typFilter==="alle"?'<span class="tag" style="background:'+t.bg+';color:'+t.color+'">'+t.label+'</span>':'')+'</td>'+
           '<td style="text-align:left;color:var(--muted)">'+MONTHS[x.m]+'</td>'+
           '<td class="num">'+eur(dealValue(x.d))+'</td>'+
           '<td class="num" style="color:'+t.color+'">'+eur(dealCommission(x.d,K.rate))+'</td>'+
           '<td class="num" style="color:var(--amber)">'+(a&&a.open>0.5?"offen "+eur(a.open):"")+'</td>'+
           '<td><button class="btn" style="padding:3px 10px;font-size:12px" data-act="jumpDeal" data-m="'+x.m+'">Anzeigen</button></td></tr>';
       }).join("")+'</table></div>'
-      :q.length>=2?'<div class="hint" style="margin-top:8px">Keine Position gefunden.</div>':'');
+      :'<div class="hint" style="margin-top:8px">Keine Position gefunden.</div>')
+    :'');
 }
 
 function renderTier(K,data){
@@ -1459,6 +1481,11 @@ function billEditorHtml(d,m,rate,yk){
   const restUmsatz=Math.max(a.value-a.billed,0);
   const rateHere=dealRate(d,rate);
 
+  /* Vorschlag für die nächste Rechnung: Monat der letzten Rechnung, sonst Monat des Abschlusses */
+  const sortiert=billsOf(d).slice().sort((x,y)=>(x.y||baseY)-(y.y||baseY)||x.m-y.m);
+  const letzte=sortiert[sortiert.length-1];
+  const vorschlag=letzte?{m:letzte.m,y:Number(letzte.y!=null?letzte.y:baseY)}:{m,y:baseY};
+
   return '<div class="box" style="margin:6px 0 10px;background:#fff">'+
     '<div class="row between" style="margin-bottom:10px">'+
     '<div><b>'+esc(d.customer)+'</b> <span class="hint">· Auftragswert '+eur(a.value)+
@@ -1468,7 +1495,7 @@ function billEditorHtml(d,m,rate,yk){
       ';background:'+(d.prepaid?"var(--tealSoft)":"#fff")+';color:'+(d.prepaid?"var(--teal)":"var(--muted)")+'"'+
       ' data-act="togglePre" data-id="'+d.id+'" data-m="'+m+'" title="Gesamte Provision sofort fällig, ohne Aufteilung">'+
       'Provision sofort vollständig</button>'+
-    '<button class="btn quiet" style="padding:2px 8px" data-act="closeBills">Schließen</button></div></div>'+
+    '<button class="btn quiet" style="padding:2px 8px" data-act="closeBills">Einklappen</button></div></div>'+
     '<div class="row" style="gap:20px;margin-bottom:10px">'+
     '<div><div class="label">Bei Abschluss</div><div class="num" style="font-weight:600;color:var(--plum)">'+eur(a.atClosing)+
       ' <span class="hint">'+pct(share,0)+'</span></div></div>'+
@@ -1486,8 +1513,8 @@ function billEditorHtml(d,m,rate,yk){
       '<div class="hint" style="border-top:1px solid var(--line);padding-top:8px">Noch keine Rechnung erfasst.</div>')+
     '<div class="row" style="gap:6px;margin-top:10px;border-top:1px solid var(--line);padding-top:10px">'+
     '<select id="nbM" style="font-size:12px;padding:5px 8px">'+
-      MONTHS.map((n,i)=>'<option value="'+i+'"'+(i===new Date().getMonth()?" selected":"")+'>'+n+'</option>').join("")+'</select>'+
-    '<select id="nbY" style="font-size:12px;padding:5px 8px">'+yearOpts(Number(YKEY()))+'</select>'+
+      MONTHS.map((n,i)=>'<option value="'+i+'"'+(i===vorschlag.m?" selected":"")+'>'+n+'</option>').join("")+'</select>'+
+    '<select id="nbY" style="font-size:12px;padding:5px 8px">'+yearOpts(vorschlag.y)+'</select>'+
     '<input id="nbA" class="rt" style="width:130px" placeholder="Betrag netto"'+(d.prepaid?" disabled":"")+'>'+
     '<button class="btn solid" data-act="billAdd" data-id="'+d.id+'" data-m="'+m+'"'+(d.prepaid?" disabled":"")+'>Rechnung erfassen</button>'+
     (restUmsatz>0&&!d.prepaid?'<button class="btn" data-act="billRest" data-id="'+d.id+'" data-m="'+m+
@@ -1684,7 +1711,7 @@ function showClaimMail(K){
   box.innerHTML='<div class="row between" style="margin-bottom:8px">'+
     '<div><b>Entwurf an '+CLAIM_TO+'</b><div class="hint">'+esc(betreff)+'</div></div>'+
     '<div class="row"><button class="btn solid" data-act="claimCopy">In Zwischenablage kopieren</button>'+
-    '<button class="btn quiet" data-act="claimClose">Schließen</button></div></div>'+
+    '<button class="btn quiet" data-act="claimClose">Einklappen</button></div></div>'+
     '<textarea id="claimText" rows="16" readonly style="width:100%;font-family:ui-monospace,monospace;font-size:12px">'+
     esc(text)+'</textarea>';
   const ta=document.getElementById("claimText");
@@ -1891,7 +1918,7 @@ function renderPanels(K,data,p,y){
     ];
     help.innerHTML='<div class="phead"><div><h2 class="sec">Anleitung</h2>'+
       '<div class="sub">In neun Schritten durch den Provisions-Tracker</div></div>'+
-      '<button class="close" data-act="closePanel">Schließen</button></div><div class="grid g3">'+
+      '<button class="close" data-act="closePanel">Einklappen</button></div><div class="grid g3">'+
       items.map(i=>'<div class="box" style="padding:12px 14px"><div style="font-weight:600;color:var(--plum);font-size:13px;margin-bottom:4px">'+
         i[0]+'</div><div style="font-size:12px;line-height:1.5;color:var(--muted)">'+i[1]+'</div></div>').join("")+'</div>';
   }
@@ -1904,7 +1931,7 @@ function renderPanels(K,data,p,y){
 
     set.innerHTML='<div class="phead"><div><h2 class="sec">Stammdaten</h2>'+
       '<div class="sub">'+esc(p.name||"dieses Profil")+' · Geschäftsjahr '+y+'</div></div>'+
-      '<button class="close" data-act="closePanel">Schließen</button></div>'+
+      '<button class="close" data-act="closePanel">Einklappen</button></div>'+
       '<div class="row" style="justify-content:flex-end;margin-bottom:12px">'+
       (confirmAction==="delYear"?'<span style="color:var(--coral)">Jahr '+y+' wirklich löschen?</span><button class="btn solid danger" data-act="delYear">Ja</button><button class="btn quiet" data-act="cancelConfirm">Abbrechen</button>'
         :'<button class="btn quiet" data-act="askDelYear">Jahr löschen</button>')+'</div>'+
@@ -1936,7 +1963,7 @@ function renderPanels(K,data,p,y){
     setTimeout(renderYearEnd,0);
     io.innerHTML='<div class="phead"><div><h2 class="sec">Datei</h2>'+
       '<div class="sub">Cloud-Synchronisierung, Export und Sicherung</div></div>'+
-      '<button class="close" data-act="closePanel">Schließen</button></div>'+
+      '<button class="close" data-act="closePanel">Einklappen</button></div>'+
       '<div class="grid g2">'+
       '<div class="box" style="border-color:var(--plum)">'+
       '<div class="row between"><div style="font-weight:600;color:var(--plum)">Cloud-Synchronisierung</div>'+
@@ -2129,7 +2156,8 @@ document.addEventListener("click",e=>{
     case "askReset": confirmAction="reset"; render(); break;
     case "resetYear": patchYear(emptyYear()); confirmAction=""; flash("Jahr zurückgesetzt."); break;
     case "toggleMonth": openMonth=openMonth===m?-1:m; pasteFor=null; pasteReview=null; render(); break;
-    case "searchClear": suche=""; render(); break;
+    case "searchClear": suche=""; typFilter="alle"; render(); break;
+    case "typFilter": typFilter=t.dataset.t; render(); break;
     case "jumpDeal": {
       openMonth=m; render();
       const sec=document.getElementById("quarters");
